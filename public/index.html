@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#07110f">
+  <meta name="description" content="Грань: Следы Нави — многопользовательская геолокационная RPG">
+  <title>Грань: Следы Нави</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="hud glass">
+      <button class="avatar" id="profileBtn" aria-label="Профиль"><span id="level">1</span></button>
+      <div class="identity">
+        <strong id="playerName">Проводник</strong>
+        <span id="playerStatus">Подключение к Грани…</span>
+      </div>
+      <div class="currencies">
+        <button class="currency" data-open="inventory"><span>✦</span><b id="essence">0</b></button>
+        <button class="currency" data-open="market"><span>◇</span><b id="signs">0</b></button>
+      </div>
+    </header>
+
+    <main id="views">
+      <section class="view active" data-view="map">
+        <div id="map"></div>
+        <div id="mapFallback" class="map-fallback hidden"><div class="grid"></div><div id="fallbackMarkers"></div></div>
+        <div class="map-vignette"></div>
+        <div class="map-top-actions">
+          <button id="questsBtn" class="round-btn" title="Задания">☷<span id="questDot" class="dot hidden"></span></button>
+          <button id="locateBtn" class="round-btn" title="Моё положение">⌖</button>
+        </div>
+        <aside class="world-card glass" id="worldCard">
+          <div><span class="live-dot"></span><b>Единый мир</b></div>
+          <small><span id="onlineNearby">0</span> проводников рядом · обновление в реальном времени</small>
+        </aside>
+        <button id="navPulse" class="navi-pulse"><span class="pulse-rune">ᚾ</span><strong>Импульс Нави</strong><small>показать скрытые следы</small></button>
+        <div class="scan-wave" id="scanWave"></div>
+      </section>
+
+      <section class="view scroll-view" data-view="codex">
+        <div class="page-head"><div><span class="eyebrow">Архив Проводника</span><h1>Журнал существ</h1></div><span id="codexCount" class="big-stat">0/12</span></div>
+        <div id="codexGrid" class="codex-grid"></div>
+      </section>
+
+      <section class="view scroll-view" data-view="shelter">
+        <div class="page-head"><div><span class="eyebrow">Ваше безопасное место</span><h1>Убежище</h1></div><span class="big-stat">⌂</span></div>
+        <div class="shelter-hero card"><div><span class="eyebrow">Старая обсерватория</span><h2>Мастерская между мирами</h2><p>Создавайте амулеты, изучайте находки и готовьтесь к экспедициям.</p></div><div class="observatory">◉</div></div>
+        <div id="shelterUpgrades" class="upgrade-grid"></div>
+        <div class="section-title"><h2>Снаряжение</h2><button class="text-btn" data-open="inventory">Инвентарь →</button></div>
+        <div id="equipment" class="equipment-row"></div>
+        <div class="section-title"><h2>Ремесло</h2><span id="professionLabel" class="muted"></span></div>
+        <div id="recipes" class="recipe-list"></div>
+      </section>
+
+      <section class="view scroll-view" data-view="market">
+        <div class="page-head"><div><span class="eyebrow">Торговля между игроками</span><h1>Рынок Грани</h1></div><button id="sellBtn" class="primary small">Продать</button></div>
+        <div class="market-note card"><b>Комиссия рынка: <span id="commission">7</span>%</b><p>Сделки проходят на сервере. Часть комиссии поддерживает мировые события.</p></div>
+        <div class="filters"><button class="chip active" data-filter="all">Все</button><button class="chip" data-filter="material">Материалы</button><button class="chip" data-filter="amulet">Амулеты</button><button class="chip" data-filter="artifact">Артефакты</button></div>
+        <div id="marketList" class="market-list"></div>
+      </section>
+
+      <section class="view scroll-view" data-view="circle">
+        <div class="page-head"><div><span class="eyebrow">До 50 Проводников</span><h1>Круг</h1></div><span class="big-stat">⬡</span></div>
+        <div id="circleContent"></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav glass">
+      <button class="nav-item active" data-nav="map"><span>⌖</span><small>Карта</small></button>
+      <button class="nav-item" data-nav="codex"><span>☷</span><small>Журнал</small></button>
+      <button class="nav-item" data-nav="shelter"><span>⌂</span><small>Убежище</small></button>
+      <button class="nav-item" data-nav="market"><span>◇</span><small>Рынок</small></button>
+      <button class="nav-item" data-nav="circle"><span>⬡</span><small>Круг</small></button>
+    </nav>
+  </div>
+
+  <div id="sheetBackdrop" class="backdrop hidden"></div>
+  <section id="sheet" class="sheet hidden" role="dialog" aria-modal="true"><div class="sheet-handle"></div><button id="sheetClose" class="sheet-close">×</button><div id="sheetContent"></div></section>
+  <section id="encounter" class="encounter hidden" role="dialog" aria-modal="true">
+    <video id="camera" class="camera hidden" autoplay muted playsinline></video><div class="encounter-fog"></div>
+    <header><button id="encounterClose">×</button><div><small id="encounterKind">ВСТРЕЧА</small><h2 id="encounterTitle">Неизвестное существо</h2></div><span id="encounterTimer">20</span></header>
+    <div id="encounterStage" class="encounter-stage"></div>
+    <div id="choicePanel" class="choice-panel hidden"><p>Как завершить встречу?</p><div><button data-choice="calm">Успокоить</button><button data-choice="study">Исследовать</button><button data-choice="banish">Изгнать</button></div></div>
+  </section>
+  <div id="toasts" class="toasts"></div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

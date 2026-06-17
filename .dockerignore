@@ -1,0 +1,6 @@
+.git
+.env
+data/state.json
+data/*.tmp
+npm-debug.log*
+.DS_Store
