@@ -20,10 +20,14 @@
     if(marker){try{marker.remove()}catch{}marker=null;}
   }
 
+  function serverPlayerId(){
+    return core.identity.initData?`tg:${core.identity.id}`:`demo:${core.identity.id}`;
+  }
+
   function makeDomovoy(pos){
     const day=new Date().toISOString().slice(0,10).replaceAll('-','');
     return {
-      id:`demo_domovoy_${core.identity.id}_${day}`,
+      id:`demo_domovoy_${serverPlayerId()}_${day}`,
       type:'creature',
       rarity:'common',
       biome:'city',
