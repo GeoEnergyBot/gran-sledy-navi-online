@@ -29,6 +29,8 @@ const DIALOGUE=[
   ]}
 ];
 const hash=input=>crypto.createHash('sha256').update(String(input)).digest('hex');
+const demoMode=String(process.env.DEMO_MODE||'1')==='1';
+function haversine(a,b){const R=6371000,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;return 2*R*Math.asin(Math.sqrt(Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2))}
 
 function ensureProfile(p){
   p.spiritKnowledge ||= {};
@@ -47,12 +49,14 @@ function runeInfo(ids){return ids.map(id=>RUNES.find(r=>r.id===id)).filter(Boole
 export function startSpiritEncounter(state,p,body){
   const base=startEncounter(state,p,body);
   if(base.creature.id!=='domovoy')throw httpError(409,'AR-прототип пока доступен только для Домового');
+  const distance=haversine({lat:Number(body.lat),lng:Number(body.lng)},{lat:base.event.lat,lng:base.event.lng});
+  if(!demoMode&&distance>30){delete state.encounters[base.challengeId];throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`)}
   const enc=state.encounters[base.challengeId];
   enc.spiritPrototype=true;enc.expiresAt=Date.now()+5*60_000;
   const profile=ensureProfile(p);
   return {
     ...base,
-    ar:{requiredDistance:30,cameraPreferred:true,fallbackAllowed:true},
+    ar:{requiredDistance:30,currentDistance:Math.round(distance),cameraPreferred:true,fallbackAllowed:true},
     interaction:{
       modes:['calm','study','banish'],
       knownRunes:runeInfo(profile.runes),
@@ -87,7 +91,7 @@ export function resolveSpiritEncounter(state,p,{challengeId,mode,payload={}}){
   }else if(mode==='calm'){
     choice='calm';const answers=Array.isArray(payload.answers)?payload.answers:[];
     let total=0,treat=null;
-    for(const round of DIALOGUE){const answer=round.options.find(o=>o.id===answers.find(x=>round.options.some(o=>o.id===x)));if(answer){total+=answer.score;if(answer.treat)treat=answer.treat}}
+    for(const round of DIALOGUE){const selectedId=answers.find(x=>round.options.some(o=>o.id===x));const answer=round.options.find(o=>o.id===selectedId);if(answer){total+=answer.score;if(answer.treat)treat=answer.treat}}
     if(treat&&(!p.inventory[treat]||p.inventory[treat]<1))throw httpError(409,'Угощения нет в инвентаре');
     success=total>=3;score=Math.min(1,Math.max(.45,.65+total*.06));
     if(success){if(treat){p.inventory[treat]--;if(p.inventory[treat]<=0)delete p.inventory[treat]}profile.calms++;profile.trust=Math.min(100,profile.trust+12+Math.max(0,total));profile.knowledge=Math.min(100,profile.knowledge+6)}
