@@ -1,4 +1,4 @@
-const CACHE='gran-shell-v9';
+const CACHE='gran-shell-v10';
 const SHELL=[
   '/',
   '/styles.css',
@@ -10,7 +10,9 @@ const SHELL=[
   '/journey.css?v=1',
   '/journey.js?v=1',
   '/district.css?v=1',
-  '/district.js?v=1'
+  '/district.js?v=1',
+  '/ui-v2.css?v=1',
+  '/ui-v2.js?v=1'
 ];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
