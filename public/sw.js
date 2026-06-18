@@ -1,21 +1,21 @@
-const CACHE='gran-shell-v12';
+const CACHE='gran-shell-v13';
 const SHELL=[
   '/',
-  '/styles.css',
-  '/stable-core.js?v=1',
-  '/app.js?v=5',
-  '/onboarding.css?v=1',
-  '/onboarding.js?v=1',
-  '/map-enhancements.css?v=3',
-  '/map-enhancements.js?v=3',
-  '/journey.css?v=2',
-  '/journey.js?v=2',
-  '/district.css?v=2',
-  '/district.js?v=2',
-  '/ui-v2.css?v=2',
-  '/ui-v2.js?v=2',
-  '/ar-encounter.css?v=1',
-  '/ar-encounter.js?v=1'
+  '/styles.css?v=6',
+  '/stable-core.js?v=2',
+  '/app.js?v=6',
+  '/onboarding.css?v=2',
+  '/onboarding.js?v=2',
+  '/map-enhancements.css?v=4',
+  '/map-enhancements.js?v=4',
+  '/journey.css?v=3',
+  '/journey.js?v=3',
+  '/district.css?v=3',
+  '/district.js?v=3',
+  '/ui-v2.css?v=3',
+  '/ui-v2.js?v=3',
+  '/ar-encounter.css?v=2',
+  '/ar-encounter.js?v=2'
 ];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
