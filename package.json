@@ -8,7 +8,7 @@
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
     "check": "node --check server.mjs && node --check src/game-engine.mjs && node --check src/districts.mjs && node --check src/store.mjs && node --check public/stable-core.js && node --check public/app.js && node --check public/ui-v2.js && node --check public/map-enhancements.js && node --check public/journey.js && node --check public/district.js",
-    "test": "npm run check && node tests/smoke.mjs && node tests/stable-core.mjs"
+    "test": "npm run check && node tests/client-contract.mjs && node tests/smoke.mjs && node tests/stable-core.mjs"
   },
   "engines": {
     "node": ">=20"
