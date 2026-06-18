@@ -1,4 +1,4 @@
-const CACHE='gran-shell-v8';
+const CACHE='gran-shell-v9';
 const SHELL=[
   '/',
   '/styles.css',
