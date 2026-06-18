@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { store } from './src/store.mjs';
 import { resolveIdentity } from './src/telegram.mjs';
+import { getDistrict, publicDistrict, contributeToDistrict } from './src/districts.mjs';
 import {
   ensurePlayer, bootstrap, worldNearby, heartbeat, startEncounter, resolveEncounter,
   craft, equip, claimQuest, upgradeShelter, marketListings, createListing, cancelListing,
@@ -71,10 +72,28 @@ async function api(req,res,url){
   const result=await store.transaction(async state=>{
     store.prune(); const p=ensurePlayer(state,identity);
     if(method==='GET'&&url.pathname==='/api/bootstrap')return bootstrap(state,p);
-    if(method==='GET'&&url.pathname==='/api/world')return {objects:worldNearby(state,p,Number(url.searchParams.get('lat')),Number(url.searchParams.get('lng')),Number(url.searchParams.get('radius')||1600))};
+    if(method==='GET'&&url.pathname==='/api/world'){
+      const lat=Number(url.searchParams.get('lat')),lng=Number(url.searchParams.get('lng'));
+      return {objects:worldNearby(state,p,lat,lng,Number(url.searchParams.get('radius')||1600)),district:publicDistrict(getDistrict(state,lat,lng))};
+    }
+    if(method==='GET'&&url.pathname==='/api/district'){
+      const lat=Number(url.searchParams.get('lat')),lng=Number(url.searchParams.get('lng'));
+      return {district:publicDistrict(getDistrict(state,lat,lng))};
+    }
     if(method==='POST'&&url.pathname==='/api/heartbeat'){const body=await readJson(req);return heartbeat(state,p,body.lat,body.lng);}
     if(method==='POST'&&url.pathname==='/api/encounters/start'){const body=await readJson(req);return startEncounter(state,p,body);}
-    if(method==='POST'&&url.pathname==='/api/encounters/resolve'){const body=await readJson(req);const out=resolveEncounter(state,p,body);if(out.reward?.shared)broadcast('rift:update',{eventId:out.reward.eventId,...out.reward.shared});return out;}
+    if(method==='POST'&&url.pathname==='/api/encounters/resolve'){
+      const body=await readJson(req);
+      const challenge=state.encounters[body.challengeId];
+      const out=resolveEncounter(state,p,body);
+      if(out.success&&challenge?.obj){
+        const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.choice,eventType:challenge.obj.type,amount:out.reward?.contribution||1});
+        out.district=districtResult.district;out.districtContribution=districtResult.contribution;
+        broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow});
+      }
+      if(out.reward?.shared)broadcast('rift:update',{eventId:out.reward.eventId,...out.reward.shared});
+      return out;
+    }
     if(method==='POST'&&url.pathname==='/api/craft'){const body=await readJson(req);return craft(state,p,body.recipeId);}
     if(method==='POST'&&url.pathname==='/api/equip'){const body=await readJson(req);return {player:equip(state,p,body)};}
     if(method==='POST'&&url.pathname==='/api/quests/claim'){const body=await readJson(req);return claimQuest(state,p,body.questId);}
