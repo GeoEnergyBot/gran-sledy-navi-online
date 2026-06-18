@@ -17,7 +17,27 @@
 
   function removeMarker(){
     clearTimeout(expiresTimer);
-    if(marker){try{marker.remove()}catch{} marker=null;}
+    if(marker){try{marker.remove()}catch{}marker=null;}
+  }
+
+  function makeDomovoy(pos){
+    const day=new Date().toISOString().slice(0,10).replaceAll('-','');
+    return {
+      id:`demo_domovoy_${core.identity.id}_${day}`,
+      type:'creature',
+      rarity:'common',
+      biome:'city',
+      creatureId:'domovoy',
+      title:'Домовой — тест AR',
+      lat:Number(pos.lat),
+      lng:Number(pos.lng),
+      startsAt:Date.now(),
+      expiresAt:Date.now()+65000,
+      target:1,
+      shared:{value:0,target:1,participants:0,closed:false},
+      completed:false,
+      demoSpirit:true
+    };
   }
 
   function openDomovoy(obj){
@@ -45,39 +65,29 @@
     core.emit('sheet:event-opened',obj);
   }
 
-  async function spawn(){
+  function spawn(){
     const pos=core.state.position;
     if(!Number.isFinite(pos?.lat)||!Number.isFinite(pos?.lng)){
       toast('Сначала разрешите геолокацию');
       return;
     }
-    try{
-      const data=await core.api(`/api/world?lat=${pos.lat}&lng=${pos.lng}&radius=1400`);
-      let obj=(data.objects||[]).find(x=>x.demoSpirit||String(x.id).startsWith('demo_domovoy_'));
-      if(!obj){
-        toast('Тестовый Домовой ещё не загружен сервером');
-        return;
-      }
-      obj={...obj,lat:pos.lat,lng:pos.lng,completed:false,title:'Домовой — тест AR'};
-      core.state.world=[obj,...(data.objects||[]).filter(x=>x.id!==obj.id)];
-      removeMarker();
-      const map=window.__granMap;
-      if(map&&window.L){
-        const icon=L.divIcon({
-          className:'',
-          html:'<button class="demo-domovoy-marker" aria-label="Тестовый Домовой"><span>⌂</span><small>Домовой</small></button>',
-          iconSize:[82,82],
-          iconAnchor:[41,41]
-        });
-        marker=L.marker([pos.lat,pos.lng],{icon,zIndexOffset:3000,interactive:true}).addTo(map);
-        marker.on('click',()=>openDomovoy(obj));
-        map.panTo([pos.lat,pos.lng],{animate:true});
-      }
-      toast('Домовой проявился прямо под вами');
-      expiresTimer=setTimeout(removeMarker,65000);
-    }catch(error){
-      toast(error.message||'Не удалось проявить Домового');
+    const obj=makeDomovoy(pos);
+    core.state.world=[obj,...core.state.world.filter(x=>x.id!==obj.id)];
+    removeMarker();
+    const map=window.__granMap;
+    if(map&&window.L){
+      const icon=L.divIcon({
+        className:'',
+        html:'<button class="demo-domovoy-marker" aria-label="Тестовый Домовой"><span>⌂</span><small>Домовой</small></button>',
+        iconSize:[82,82],
+        iconAnchor:[41,41]
+      });
+      marker=L.marker([pos.lat,pos.lng],{icon,zIndexOffset:3000,interactive:true}).addTo(map);
+      marker.on('click',()=>openDomovoy(obj));
+      map.panTo([pos.lat,pos.lng],{animate:true});
     }
+    toast('Домовой проявился прямо под вами');
+    expiresTimer=setTimeout(removeMarker,65000);
   }
 
   window.addEventListener('load',()=>{
