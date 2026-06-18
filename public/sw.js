@@ -1,4 +1,4 @@
-const CACHE='gran-shell-v13';
+const CACHE='gran-shell-v14';
 const SHELL=[
   '/',
   '/styles.css?v=6',
@@ -15,7 +15,9 @@ const SHELL=[
   '/ui-v2.css?v=3',
   '/ui-v2.js?v=3',
   '/ar-encounter.css?v=2',
-  '/ar-encounter.js?v=2'
+  '/ar-encounter.js?v=2',
+  '/demo-domovoy.css?v=1',
+  '/demo-domovoy.js?v=1'
 ];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
