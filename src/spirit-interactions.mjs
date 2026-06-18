@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { startEncounter, resolveEncounter, httpError } from './game-engine.mjs';
+import { getCreature } from './catalog.mjs';
 
 const RUNES=[
   {id:'hearth',symbol:'ᛟ',name:'Руна очага',color:'ember'},
@@ -46,8 +47,28 @@ function ensureProfile(p){
 function addItem(p,id,qty=1){p.inventory[id]=(p.inventory[id]||0)+qty}
 function runeInfo(ids){return ids.map(id=>RUNES.find(r=>r.id===id)).filter(Boolean)}
 
+export function demoDomovoyObject(p,lat,lng){
+  if(!demoMode)return null;
+  const day=new Date().toISOString().slice(0,10).replaceAll('-','');
+  return {
+    id:`demo_domovoy_${p.id}_${day}`,
+    type:'creature',rarity:'common',biome:'city',creatureId:'domovoy',title:'Домовой — тест AR',
+    lat:Number(lat)+0.00016,lng:Number(lng)+0.00002,startsAt:Date.now(),expiresAt:Date.now()+24*60*60_000,target:1,
+    shared:{value:0,target:1,participants:0,closed:false},completed:false,demoSpirit:true
+  };
+}
+function startDemoEncounter(state,p,body){
+  const obj=demoDomovoyObject(p,body.lat,body.lng);
+  if(!obj||body.eventId!==obj.id)throw httpError(404,'Тестовый Домовой не найден');
+  delete p.completed[obj.id];
+  const challengeId=`enc_${crypto.randomUUID()}`,creature=getCreature('domovoy');
+  const challenge={id:challengeId,playerId:p.id,eventId:obj.id,obj,createdAt:Date.now(),expiresAt:Date.now()+5*60_000,type:'spirit',difficulty:1,nonce:hash(challengeId).slice(0,12),spiritPrototype:true};
+  state.encounters[challengeId]=challenge;
+  return {challengeId,type:'spirit',difficulty:1,nonce:challenge.nonce,event:obj,creature};
+}
+
 export function startSpiritEncounter(state,p,body){
-  const base=startEncounter(state,p,body);
+  const base=String(body.eventId||'').startsWith('demo_domovoy_')?startDemoEncounter(state,p,body):startEncounter(state,p,body);
   if(base.creature.id!=='domovoy')throw httpError(409,'AR-прототип пока доступен только для Домового');
   const distance=haversine({lat:Number(body.lat),lng:Number(body.lng)},{lat:base.event.lat,lng:base.event.lng});
   if(!demoMode&&distance>30){delete state.encounters[base.challengeId];throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`)}
@@ -75,40 +96,20 @@ export function resolveSpiritEncounter(state,p,{challengeId,mode,payload={}}){
   if(enc.obj.creatureId!=='domovoy')throw httpError(409,'Неподдерживаемое существо');
   const profile=ensureProfile(p);
   let success=false,score=0.9,choice='study',detail={};
-
   if(mode==='study'){
     const focusMs=Math.max(0,Number(payload.focusMs)||0),breaks=Math.max(0,Number(payload.focusBreaks)||0),observations=Math.max(0,Number(payload.observations)||0);
-    success=focusMs>=10_000&&breaks<=3;
-    score=Math.min(1,.65+focusMs/40_000+observations*.04-breaks*.05);
-    detail={focusMs,breaks,observations};
-    if(success){
-      profile.studies++;profile.knowledge=Math.min(100,profile.knowledge+Math.min(28,18+observations*3));
-      const unseen=DOMOVOY_SEQUENCE.filter(id=>!profile.runes.includes(id));
-      if(unseen.length){const unlocked=unseen[0];profile.runes.push(unlocked);detail.unlockedRune=RUNES.find(r=>r.id===unlocked)}
-      const roll=parseInt(hash(`${challengeId}|glyph`).slice(0,8),16)/0xffffffff;
-      if(roll<.45){const runeId=DOMOVOY_SEQUENCE[parseInt(hash(challengeId).slice(8,10),16)%DOMOVOY_SEQUENCE.length];const glyphId=`glyph_${runeId}`;addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}
-    }
+    success=focusMs>=10000&&breaks<=3;score=Math.min(1,.65+focusMs/40000+observations*.04-breaks*.05);detail={focusMs,breaks,observations};
+    if(success){profile.studies++;profile.knowledge=Math.min(100,profile.knowledge+Math.min(28,18+observations*3));const unseen=DOMOVOY_SEQUENCE.filter(id=>!profile.runes.includes(id));if(unseen.length){const unlocked=unseen[0];profile.runes.push(unlocked);detail.unlockedRune=RUNES.find(r=>r.id===unlocked)}const roll=parseInt(hash(`${challengeId}|glyph`).slice(0,8),16)/0xffffffff;if(roll<.45){const runeId=DOMOVOY_SEQUENCE[parseInt(hash(challengeId).slice(8,10),16)%DOMOVOY_SEQUENCE.length],glyphId=`glyph_${runeId}`;addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}}
   }else if(mode==='calm'){
-    choice='calm';const answers=Array.isArray(payload.answers)?payload.answers:[];
-    let total=0,treat=null;
-    for(const round of DIALOGUE){const selectedId=answers.find(x=>round.options.some(o=>o.id===x));const answer=round.options.find(o=>o.id===selectedId);if(answer){total+=answer.score;if(answer.treat)treat=answer.treat}}
+    choice='calm';const answers=Array.isArray(payload.answers)?payload.answers:[];let total=0,treat=null;
+    for(const round of DIALOGUE){const selectedId=answers.find(x=>round.options.some(o=>o.id===x)),answer=round.options.find(o=>o.id===selectedId);if(answer){total+=answer.score;if(answer.treat)treat=answer.treat}}
     if(treat&&(!p.inventory[treat]||p.inventory[treat]<1))throw httpError(409,'Угощения нет в инвентаре');
-    success=total>=3;score=Math.min(1,Math.max(.45,.65+total*.06));
-    if(success){if(treat){p.inventory[treat]--;if(p.inventory[treat]<=0)delete p.inventory[treat]}profile.calms++;profile.trust=Math.min(100,profile.trust+12+Math.max(0,total));profile.knowledge=Math.min(100,profile.knowledge+6)}
-    detail={dialogueScore:total,treatUsed:success?treat:null};
+    success=total>=3;score=Math.min(1,Math.max(.45,.65+total*.06));if(success){if(treat){p.inventory[treat]--;if(p.inventory[treat]<=0)delete p.inventory[treat]}profile.calms++;profile.trust=Math.min(100,profile.trust+12+Math.max(0,total));profile.knowledge=Math.min(100,profile.knowledge+6)}detail={dialogueScore:total,treatUsed:success?treat:null};
   }else if(mode==='banish'){
-    choice='banish';const sequence=Array.isArray(payload.sequence)?payload.sequence:[],errors=Math.max(0,Number(payload.errors)||0);
-    const correct=DOMOVOY_SEQUENCE.every((id,index)=>sequence[index]===id);
-    success=correct&&errors<=3;score=correct?Math.max(.7,1-errors*.08):.1;
-    if(success){profile.banishes++;profile.knowledge=Math.min(100,profile.knowledge+4);const roll=parseInt(hash(`${challengeId}|banish`).slice(0,8),16)/0xffffffff;if(roll<.3){addItem(p,'glyph_boundary',1);detail.glyph={itemId:'glyph_boundary',rune:RUNES.find(r=>r.id==='boundary')}}}
-    detail={...detail,correct,errors,expectedSlots:3};
+    choice='banish';const sequence=Array.isArray(payload.sequence)?payload.sequence:[],errors=Math.max(0,Number(payload.errors)||0),correct=DOMOVOY_SEQUENCE.every((id,index)=>sequence[index]===id);success=correct&&errors<=3;score=correct?Math.max(.7,1-errors*.08):.1;if(success){profile.banishes++;profile.knowledge=Math.min(100,profile.knowledge+4);const roll=parseInt(hash(`${challengeId}|banish`).slice(0,8),16)/0xffffffff;if(roll<.3){addItem(p,'glyph_boundary',1);detail.glyph={itemId:'glyph_boundary',rune:RUNES.find(r=>r.id==='boundary')}}}detail={...detail,correct,errors,expectedSlots:3};
   }else throw httpError(400,'Неизвестный способ взаимодействия');
-
   if(!success){delete state.encounters[challengeId];return {success:false,mode,detail,spiritProgress:profile,retryAfter:10}}
-  const result=resolveEncounter(state,p,{challengeId,score:Math.max(.82,score),choice});
-  result.mode=mode;result.detail=detail;result.spiritProgress=profile;
-  return result;
+  const result=resolveEncounter(state,p,{challengeId,score:Math.max(.82,score),choice});result.mode=mode;result.detail=detail;result.spiritProgress=profile;return result;
 }
-
 export function spiritProfile(p){return ensureProfile(p)}
 export const spiritRunes=RUNES;
