@@ -27,9 +27,9 @@ assert.match(files['public/stable-core.js'],/x-telegram-init-data/);
 assert.match(files['public/stable-core.js'],/getReader\(\)/);
 assert.match(files['public/ar-encounter.js'],/\/api\/spirit\/start/);
 assert.match(files['public/ar-encounter.js'],/\/api\/spirit\/resolve/);
-assert.match(files['public/ar-encounter.js'],/mode,'study'/);
-assert.match(files['public/ar-encounter.js'],/mode,'calm'/);
-assert.match(files['public/ar-encounter.js'],/mode,'banish'/);
+assert.match(files['public/ar-encounter.js'],/finish\('study'/);
+assert.match(files['public/ar-encounter.js'],/finish\('calm'/);
+assert.match(files['public/ar-encounter.js'],/finish\('banish'/);
 
 console.log('✓ stable-core loads first');
 console.log('✓ single fetch owner');
