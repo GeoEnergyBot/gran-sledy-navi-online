@@ -1,4 +1,4 @@
-const CACHE='gran-shell-v18';
+const CACHE='gran-shell-v19';
 const SHELL=[
   '/',
   '/styles.css?v=6',
@@ -14,9 +14,11 @@ const SHELL=[
   '/district.js?v=3',
   '/ui-v2.css?v=3',
   '/ui-v2.js?v=3',
-  '/ar-encounter.css?v=4',
-  '/ar-encounter-adaptive.css?v=1',
-  '/ar-encounter.js?v=4'
+  '/ar-encounter.css?v=5',
+  '/ar-encounter-adaptive.css?v=2',
+  '/ar-encounter.js?v=5',
+  '/pulse-random-spirit.css?v=1',
+  '/pulse-random-spirit.js?v=1'
 ];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
