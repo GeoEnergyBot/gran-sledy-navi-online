@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve('data');
 const STATE_PATH = path.join(DATA_DIR, 'state.json');
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 function emptyState(){
   return {
@@ -12,6 +12,7 @@ function emptyState(){
     players: {},
     worldProgress: {},
     encounters: {},
+    testSpawns: {},
     market: { listings:{}, sales:[] },
     circles: {},
     districts: {},
@@ -27,6 +28,7 @@ function migrateState(input){
   state.players ||= {};
   state.worldProgress ||= {};
   state.encounters ||= {};
+  state.testSpawns ||= {};
   state.market ||= {listings:{},sales:[]};
   state.market.listings ||= {};
   state.market.sales ||= [];
@@ -103,6 +105,9 @@ export class JsonStore {
     }
     for (const [id, encounter] of Object.entries(this.state.encounters)) {
       if (now - encounter.createdAt > 15 * 60_000) delete this.state.encounters[id];
+    }
+    for (const [id, spawn] of Object.entries(this.state.testSpawns||{})) {
+      if (now > Number(spawn.expiresAt||0)) delete this.state.testSpawns[id];
     }
     if (this.state.audit.length > 4000) this.state.audit = this.state.audit.slice(-2500);
     if (this.state.market.sales.length > 1000) this.state.market.sales = this.state.market.sales.slice(-700);
