@@ -53,9 +53,14 @@ try{
   assert.equal(study.mode,'study');
   assert.ok(study.detail.unlockedRune?.id);
 
-  const calmObj=await spawnSpirit('diplomat');
+  let calmObj;
+  for(let i=0;i<30;i++){
+    const candidate=await spawnSpirit('diplomat');
+    if(['city','park'].includes(candidate.biome)){calmObj=candidate;break}
+  }
+  assert.ok(calmObj,'expected a city or park test creature');
   const calmStart=await start('diplomat',calmObj);
-  const bestAnswers=calmStart.interaction.calm.dialogue.map(round=>round.options.sort((a,b)=>b.score-a.score)[0].id);
+  const bestAnswers=calmStart.interaction.calm.dialogue.map(round=>[...round.options].sort((a,b)=>b.score-a.score)[0].id);
   const calm=await api('diplomat','/api/spirit/resolve',{challengeId:calmStart.challengeId,mode:'calm',payload:{answers:bestAnswers}});
   assert.equal(calm.success,true);
   assert.equal(calm.mode,'calm');
