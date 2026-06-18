@@ -3,29 +3,59 @@ import path from 'node:path';
 
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve('data');
 const STATE_PATH = path.join(DATA_DIR, 'state.json');
+const CURRENT_VERSION = 5;
 
 function emptyState(){
   return {
-    version: 4,
+    version: CURRENT_VERSION,
     createdAt: new Date().toISOString(),
     players: {},
     worldProgress: {},
     encounters: {},
     market: { listings:{}, sales:[] },
     circles: {},
+    districts: {},
     presence: {},
     economy: { treasury:0, worldFund:0, burned:0, totalSignsIssued:0 },
     audit: []
   };
 }
 
+function migrateState(input){
+  const state = input && typeof input === 'object' ? input : emptyState();
+  state.version = Number(state.version || 1);
+  state.players ||= {};
+  state.worldProgress ||= {};
+  state.encounters ||= {};
+  state.market ||= {listings:{},sales:[]};
+  state.market.listings ||= {};
+  state.market.sales ||= [];
+  state.circles ||= {};
+  state.presence ||= {};
+  state.economy ||= {treasury:0,worldFund:0,burned:0,totalSignsIssued:0};
+  state.audit ||= [];
+  if(state.version < 5){
+    state.districts ||= {};
+    for(const player of Object.values(state.players)){
+      player.flags ||= {tutorial:false};
+      player.cosmetics ||= {frame:'default',scanner:'copper'};
+      player.stats ||= {encounters:0,crafts:0,trades:0,riftContribution:0,distanceM:0};
+    }
+  }
+  state.districts ||= {};
+  state.version = CURRENT_VERSION;
+  state.migratedAt = new Date().toISOString();
+  return state;
+}
+
 export class JsonStore {
   constructor(){
     fs.mkdirSync(DATA_DIR, {recursive:true});
     if (!fs.existsSync(STATE_PATH)) fs.writeFileSync(STATE_PATH, JSON.stringify(emptyState(), null, 2));
-    this.state = this.#read();
+    this.state = migrateState(this.#read());
     this.queue = Promise.resolve();
     this.dirty = false;
+    fs.writeFileSync(STATE_PATH, JSON.stringify(this.state, null, 2));
   }
 
   #read(){
@@ -50,6 +80,11 @@ export class JsonStore {
     await this.queue;
     if (failure) throw failure;
     return result;
+  }
+
+  async read(fn){
+    await this.queue;
+    return fn(this.state);
   }
 
   async save(){
