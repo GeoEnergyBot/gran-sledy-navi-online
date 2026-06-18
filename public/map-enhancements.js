@@ -27,7 +27,7 @@ window.fetch=async(...args)=>{
 
 function watchPosition(){
   if(!navigator.geolocation)return;
-  navigator.geolocation.watchPosition(pos=>{ME.position={lat:pos.coords.latitude,lng:pos.coords.longitude};renderNearest();decorateOpenEvent()},()=>{}, {enableHighAccuracy:true,maximumAge:5000,timeout:10000});
+  navigator.geolocation.watchPosition(pos=>{ME.position={lat:pos.coords.latitude,lng:pos.coords.longitude};renderNearest();refreshOpenEventDistance()},()=>{}, {enableHighAccuracy:true,maximumAge:5000,timeout:10000});
 }
 
 function ensureNearest(){
@@ -61,38 +61,56 @@ function renderNearest(){
 }
 function openRoute(obj){
   const url=`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(obj.lat)},${encodeURIComponent(obj.lng)}&travelmode=walking`;
-  window.open(url,'_blank','noopener,noreferrer');
+  try{
+    if(window.Telegram?.WebApp?.openLink){window.Telegram.WebApp.openLink(url,{try_instant_view:false});return}
+  }catch{}
+  window.location.href=url;
 }
 
 function findOpenObject(){
-  const title=document.querySelector('#sheetContent h2')?.textContent?.trim();
+  const root=document.querySelector('#sheetContent');
+  const title=root?.querySelector('.event-hero h2')?.textContent?.trim()||root?.querySelector('h2')?.textContent?.trim();
   if(!title)return null;
   return ME.world.find(x=>x.title===title)||null;
 }
+function clearDistanceUi(root){
+  root.querySelectorAll('.event-distance-box,.safety-note').forEach(el=>el.remove());
+}
 function decorateOpenEvent(){
-  const root=document.querySelector('#sheetContent');if(!root||root.dataset.distanceDecorated==='1')return;
-  const obj=findOpenObject();if(!obj||!ME.position)return;
-  root.dataset.distanceDecorated='1';
+  const root=document.querySelector('#sheetContent');if(!root)return;
+  const obj=findOpenObject();
+  clearDistanceUi(root);
+  if(!obj||!ME.position){root.dataset.distanceDecorated='';return}
   const d=distanceM(ME.position,obj),ready=d<=140||ME.demoMode;
   const box=document.createElement('div');box.className=`event-distance-box ${ready?'ready':'far'}`;
   box.innerHTML=`<div><strong>${ready?'Можно начинать встречу':'Подойдите ближе к событию'}</strong><span>${fmt(d)} · около ${walkTime(d)} мин пешком${ME.demoMode?' · деморежим':''}</span></div><button type="button" class="route-btn">Маршрут</button>`;
   const firstButton=root.querySelector('#startEncounter,#startAR');
   if(firstButton)root.insertBefore(box,firstButton);else root.append(box);
-  box.querySelector('button').onclick=()=>openRoute(obj);
+  box.querySelector('.route-btn').addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openRoute(obj)});
   const start=root.querySelector('#startEncounter');
   if(start){
     start.classList.add('encounter-gate');
-    if(!ready){start.disabled=true;start.textContent=`Подойдите ещё на ${Math.max(1,Math.round(d-140))} м`;}
-    else start.textContent=obj.type==='rift'?'Внести вклад в разлом':'Начать встречу';
+    start.disabled=!ready;
+    start.textContent=ready?(obj.type==='rift'?'Внести вклад в разлом':'Начать встречу'):`Подойдите ещё на ${Math.max(1,Math.round(d-140))} м`;
   }
-  if(!root.querySelector('.safety-note')){
-    const note=document.createElement('div');note.className='safety-note';note.innerHTML='<b>!</b><span>Смотрите по сторонам. Не заходите на закрытые территории и не играйте во время управления транспортом.</span>';root.append(note);
-  }
+  const note=document.createElement('div');note.className='safety-note';note.innerHTML='<b>!</b><span>Смотрите по сторонам. Не заходите на закрытые территории и не играйте во время управления транспортом.</span>';root.append(note);
+  root.dataset.distanceDecorated=obj.id;
+}
+function refreshOpenEventDistance(){
+  const root=document.querySelector('#sheetContent');
+  if(!root||document.querySelector('#sheet')?.classList.contains('hidden'))return;
+  if(findOpenObject())decorateOpenEvent();
 }
 
 function observeSheet(){
   const root=document.querySelector('#sheetContent');if(!root)return;
-  new MutationObserver(()=>{root.dataset.distanceDecorated='0';setTimeout(decorateOpenEvent,0)}).observe(root,{childList:true,subtree:true});
+  let scheduled=false;
+  new MutationObserver(mutations=>{
+    const externalChange=mutations.some(m=>[...m.addedNodes].some(node=>node.nodeType===1&&!node.classList?.contains('event-distance-box')&&!node.classList?.contains('safety-note')));
+    if(!externalChange||scheduled)return;
+    scheduled=true;
+    requestAnimationFrame(()=>{scheduled=false;decorateOpenEvent()});
+  }).observe(root,{childList:true});
 }
 function trackPulse(){
   const pulse=document.querySelector('#navPulse');if(!pulse)return;
