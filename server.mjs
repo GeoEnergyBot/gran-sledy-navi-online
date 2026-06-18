@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { store } from './src/store.mjs';
 import { resolveIdentity } from './src/telegram.mjs';
 import { getDistrict, publicDistrict, contributeToDistrict } from './src/districts.mjs';
-import { startSpiritEncounter, resolveSpiritEncounter, spiritProfile, createRandomTestSpirit } from './src/spirit-interactions.mjs';
+import { startSpiritEncounter, resolveSpiritEncounter, spiritProfile, createRandomTestSpirit, checkSpiritRune, checkStudyTool } from './src/spirit-interactions.mjs';
 import {
   ensurePlayer, bootstrap, worldNearby, heartbeat, startEncounter, resolveEncounter,
   craft, equip, claimQuest, upgradeShelter, marketListings, createListing, cancelListing,
@@ -14,7 +14,7 @@ import {
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC=path.join(ROOT,'public');
-const VERSION='0.6.1';
+const VERSION='0.6.2';
 const env={PORT:Number(process.env.PORT||8080),HOST:process.env.HOST||'0.0.0.0',DEMO_MODE:String(process.env.DEMO_MODE||'1')==='1',BOT_TOKEN:process.env.BOT_TOKEN||''};
 const clients=new Set(),rate=new Map();
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.gif':'image/gif','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.mp3':'audio/mpeg'};
@@ -46,6 +46,8 @@ async function api(req,res,url){
     if(method==='POST'&&url.pathname==='/api/heartbeat'){const body=await readJson(req),{lat,lng}=parseCoords(body.lat,body.lng);return heartbeat(state,p,lat,lng)}
     if(method==='POST'&&url.pathname==='/api/test/spirit-spawn'){const body=await readJson(req),coords=parseCoords(body.lat,body.lng);return {object:createRandomTestSpirit(state,p,coords)}}
     if(method==='POST'&&url.pathname==='/api/spirit/start'){const body=await readJson(req);parseCoords(body.lat,body.lng);return startSpiritEncounter(state,p,body)}
+    if(method==='POST'&&url.pathname==='/api/spirit/rune-check'){const body=await readJson(req);return checkSpiritRune(state,p,body)}
+    if(method==='POST'&&url.pathname==='/api/spirit/study-check'){const body=await readJson(req);return checkStudyTool(state,p,body)}
     if(method==='POST'&&url.pathname==='/api/spirit/resolve'){
       const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveSpiritEncounter(state,p,body);
       if(out.success&&challenge?.obj){const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.mode==='calm'?'calm':body.mode==='banish'?'banish':'study',eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}
