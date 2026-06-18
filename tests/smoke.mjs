@@ -75,6 +75,9 @@ try {
   const worldB = await request('beta', '/api/world?lat=43.238949&lng=76.889709&radius=1200');
   assert.ok(worldA.objects.length > 10);
   assert.deepEqual(worldA.objects.map(x => x.id), worldB.objects.map(x => x.id));
+  assert.ok(worldA.district?.id);
+  assert.equal(worldA.district.id, worldB.district.id);
+  const initialDistrictProgress = worldA.district.threat.progress;
 
   const obj = worldA.objects[0];
   const started = await request('alpha', '/api/encounters/start', {
@@ -88,6 +91,12 @@ try {
     choice: 'study'
   });
   assert.equal(resolved.success, true);
+  assert.ok(resolved.districtContribution > 0);
+  assert.ok(resolved.district.threat.progress > initialDistrictProgress);
+
+  const district = await request('alpha', `/api/district?lat=${obj.lat}&lng=${obj.lng}`);
+  assert.equal(district.district.id, resolved.district.id);
+  assert.ok(district.district.history.length > 1);
 
   const crafted = await request('alpha', '/api/craft', { recipeId: 'craft_chalk' });
   assert.ok(crafted.player.inventory.chalk >= 2);
@@ -104,6 +113,7 @@ try {
 
   console.log('✓ bootstrap/catalog');
   console.log('✓ deterministic shared world');
+  console.log('✓ living district progression');
   console.log('✓ encounter/rewards');
   console.log('✓ crafting');
   console.log('✓ marketplace commission and transfer');
