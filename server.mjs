@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { store } from './src/store.mjs';
 import { resolveIdentity } from './src/telegram.mjs';
 import { getDistrict, publicDistrict, contributeToDistrict } from './src/districts.mjs';
-import { startSpiritEncounter, resolveSpiritEncounter, spiritProfile, demoDomovoyObject } from './src/spirit-interactions.mjs';
+import { startSpiritEncounter, resolveSpiritEncounter, spiritProfile } from './src/spirit-interactions.mjs';
 import {
   ensurePlayer, bootstrap, worldNearby, heartbeat, startEncounter, resolveEncounter,
   craft, equip, claimQuest, upgradeShelter, marketListings, createListing, cancelListing,
@@ -14,7 +14,7 @@ import {
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC=path.join(ROOT,'public');
-const VERSION='0.5.2';
+const VERSION='0.6.0';
 const env={PORT:Number(process.env.PORT||8080),HOST:process.env.HOST||'0.0.0.0',DEMO_MODE:String(process.env.DEMO_MODE||'1')==='1',BOT_TOKEN:process.env.BOT_TOKEN||''};
 const clients=new Set(),rate=new Map();
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.gif':'image/gif','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.mp3':'audio/mpeg'};
@@ -29,21 +29,27 @@ function serveStatic(req,res){const full=pathSafe(req.url);if(!full)return json(
 
 async function api(req,res,url){
   const identity=auth(req),method=req.method||'GET';
-  if(method==='GET'&&url.pathname==='/api/stream'){res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache, no-transform','connection':'keep-alive','x-accel-buffering':'no'});res.write(`event: connected\ndata: {"time":${Date.now()},"version":"${VERSION}"}\n\n`);clients.add(res);const ping=setInterval(()=>{if(res.destroyed||res.writableEnded){clearInterval(ping);clients.delete(res);return}try{res.write(`event: ping\ndata: {"time":${Date.now()}}\n\n`)}catch{clearInterval(ping);clients.delete(res)}},25000);req.on('close',()=>{clearInterval(ping);clients.delete(res)});return}
+  if(method==='GET'&&url.pathname==='/api/stream'){
+    res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache, no-transform','connection':'keep-alive','x-accel-buffering':'no'});
+    res.write(`event: connected\ndata: {"time":${Date.now()},"version":"${VERSION}"}\n\n`);clients.add(res);
+    const ping=setInterval(()=>{if(res.destroyed||res.writableEnded){clearInterval(ping);clients.delete(res);return}try{res.write(`event: ping\ndata: {"time":${Date.now()}}\n\n`)}catch{clearInterval(ping);clients.delete(res)}},25000);
+    req.on('close',()=>{clearInterval(ping);clients.delete(res)});return;
+  }
   const result=await store.transaction(async state=>{
     store.prune();const p=ensurePlayer(state,identity);
     if(method==='GET'&&url.pathname==='/api/bootstrap'){const out=bootstrap(state,p);out.spiritProgress=spiritProfile(p);return out}
     if(method==='GET'&&url.pathname==='/api/world'){
       const {lat,lng}=parseCoords(url.searchParams.get('lat'),url.searchParams.get('lng'));
-      const objects=worldNearby(state,p,lat,lng,Number(url.searchParams.get('radius')||1600));
-      const demoSpirit=demoDomovoyObject(p,lat,lng);
-      if(demoSpirit&&!objects.some(x=>x.id===demoSpirit.id))objects.unshift(demoSpirit);
-      return {objects,district:publicDistrict(getDistrict(state,lat,lng))};
+      return {objects:worldNearby(state,p,lat,lng,Number(url.searchParams.get('radius')||1600)),district:publicDistrict(getDistrict(state,lat,lng))};
     }
     if(method==='GET'&&url.pathname==='/api/district'){const {lat,lng}=parseCoords(url.searchParams.get('lat'),url.searchParams.get('lng'));return {district:publicDistrict(getDistrict(state,lat,lng))}}
     if(method==='POST'&&url.pathname==='/api/heartbeat'){const body=await readJson(req),{lat,lng}=parseCoords(body.lat,body.lng);return heartbeat(state,p,lat,lng)}
     if(method==='POST'&&url.pathname==='/api/spirit/start'){const body=await readJson(req);parseCoords(body.lat,body.lng);return startSpiritEncounter(state,p,body)}
-    if(method==='POST'&&url.pathname==='/api/spirit/resolve'){const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveSpiritEncounter(state,p,body);if(out.success&&challenge?.obj){const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.mode==='calm'?'calm':body.mode==='banish'?'banish':'study',eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}return out}
+    if(method==='POST'&&url.pathname==='/api/spirit/resolve'){
+      const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveSpiritEncounter(state,p,body);
+      if(out.success&&challenge?.obj){const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.mode==='calm'?'calm':body.mode==='banish'?'banish':'study',eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}
+      return out;
+    }
     if(method==='POST'&&url.pathname==='/api/encounters/start'){const body=await readJson(req);parseCoords(body.lat,body.lng);return startEncounter(state,p,body)}
     if(method==='POST'&&url.pathname==='/api/encounters/resolve'){const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveEncounter(state,p,body);if(out.success&&challenge?.obj){const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.choice,eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}if(out.reward?.shared)broadcast('rift:update',{eventId:out.reward.eventId,...out.reward.shared});return out}
     if(method==='POST'&&url.pathname==='/api/craft'){const body=await readJson(req);return craft(state,p,body.recipeId)}
@@ -62,5 +68,13 @@ async function api(req,res,url){
   });
   json(res,200,result);
 }
-const server=http.createServer(async(req,res)=>{try{res.setHeader('x-frame-options','SAMEORIGIN');res.setHeader('permissions-policy','geolocation=(self), camera=(self), accelerometer=(self), gyroscope=(self)');res.setHeader('x-app-version',VERSION);const url=new URL(req.url,`http://${req.headers.host||'localhost'}`);if(url.pathname==='/health')return json(res,200,{ok:true,service:'gran-sledy-navi',version:VERSION,time:Date.now(),demoMode:env.DEMO_MODE,realtimeClients:clients.size});if(url.pathname.startsWith('/api/'))await api(req,res,url);else serveStatic(req,res)}catch(error){console.error(error);json(res,error.status||500,{error:error.message||'Внутренняя ошибка'})}});
+
+const server=http.createServer(async(req,res)=>{
+  try{
+    res.setHeader('x-frame-options','SAMEORIGIN');res.setHeader('permissions-policy','geolocation=(self), camera=(self), accelerometer=(self), gyroscope=(self)');res.setHeader('x-app-version',VERSION);
+    const url=new URL(req.url,`http://${req.headers.host||'localhost'}`);
+    if(url.pathname==='/health')return json(res,200,{ok:true,service:'gran-sledy-navi',version:VERSION,time:Date.now(),demoMode:env.DEMO_MODE,realtimeClients:clients.size});
+    if(url.pathname.startsWith('/api/'))await api(req,res,url);else serveStatic(req,res);
+  }catch(error){console.error(error);json(res,error.status||500,{error:error.message||'Внутренняя ошибка'})}
+});
 server.listen(env.PORT,env.HOST,()=>console.log(`Грань: Следы Нави ${VERSION} — http://${env.HOST}:${env.PORT} (demo=${env.DEMO_MODE})`));
