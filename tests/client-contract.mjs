@@ -13,6 +13,7 @@ assert.ok(index.indexOf('/stable-core.js')<index.indexOf('/ui-v2.js'),'stable-co
 assert.ok(index.indexOf('/stable-core.js')<index.indexOf('/app.js'),'stable-core must load before app');
 assert.match(index,/ar-encounter\.css/);
 assert.match(index,/ar-encounter\.js/);
+assert.doesNotMatch(index,/demo-domovoy/);
 
 const fetchOwners=Object.entries(files).filter(([,text])=>/window\.fetch\s*=/.test(text)).map(([name])=>name);
 assert.deepEqual(fetchOwners,['public/stable-core.js'],'only stable-core may wrap window.fetch');
@@ -30,10 +31,13 @@ assert.match(files['public/ar-encounter.js'],/\/api\/spirit\/resolve/);
 assert.match(files['public/ar-encounter.js'],/finish\('study'/);
 assert.match(files['public/ar-encounter.js'],/finish\('calm'/);
 assert.match(files['public/ar-encounter.js'],/finish\('banish'/);
+assert.doesNotMatch(files['public/ar-encounter.js'],/creatureId!=='domovoy'/);
+assert.match(files['public/map-enhancements.js'],/isCreature\?30:140/);
 
 console.log('✓ stable-core loads first');
 console.log('✓ single fetch owner');
 console.log('✓ no unauthenticated EventSource');
 console.log('✓ event selection uses eventId');
 console.log('✓ authenticated streaming client');
-console.log('✓ AR encounter assets and three paths are wired');
+console.log('✓ AR encounter supports every creature');
+console.log('✓ test Domovoy assets removed');
