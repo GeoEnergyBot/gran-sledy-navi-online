@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { startEncounter, resolveEncounter, httpError } from './game-engine.mjs';
-import { getCreature } from './catalog.mjs';
+import { creatures } from './catalog.mjs';
 
 const RUNES=[
   {id:'hearth',symbol:'ᛟ',name:'Руна очага',color:'ember'},
@@ -8,83 +8,106 @@ const RUNES=[
   {id:'silence',symbol:'ᛏ',name:'Руна тишины',color:'silver'},
   {id:'path',symbol:'ᚱ',name:'Руна пути',color:'green'},
   {id:'memory',symbol:'ᚾ',name:'Руна памяти',color:'violet'},
-  {id:'ward',symbol:'ᛇ',name:'Руна защиты',color:'gold'}
+  {id:'ward',symbol:'ᛇ',name:'Руна защиты',color:'gold'},
+  {id:'water',symbol:'ᛚ',name:'Руна воды',color:'cyan'},
+  {id:'sun',symbol:'ᛋ',name:'Руна солнца',color:'amber'},
+  {id:'dream',symbol:'ᛗ',name:'Руна сна',color:'indigo'},
+  {id:'truth',symbol:'ᚨ',name:'Руна истины',color:'white'}
 ];
-const DOMOVOY_SEQUENCE=['hearth','boundary','silence'];
-const TREATS={milk:2,bread:2,honey:3};
-const DIALOGUE=[
-  {id:'approach',line:'«Чужой ходит, дверями хлопает, а хозяина не спрашивает…»',options:[
-    {id:'praise_home',text:'Похвалить его дом',score:2},
-    {id:'command',text:'Приказать показаться',score:-2},
-    {id:'apologize',text:'Извиниться за вторжение',score:1}
-  ]},
-  {id:'offering',line:'Домовой принюхивается и внимательно смотрит на руки.',options:[
-    {id:'offer_milk',text:'Предложить молоко',score:2,treat:'milk'},
-    {id:'offer_bread',text:'Предложить хлеб',score:1,treat:'bread'},
-    {id:'threaten',text:'Пригрозить защитной солью',score:-2}
-  ]},
-  {id:'promise',line:'«Не шуми после полуночи — тогда покажу, что спрятано».',options:[
-    {id:'agree',text:'Согласиться и поблагодарить',score:2},
-    {id:'bargain',text:'Предложить честную сделку',score:1},
-    {id:'deceive',text:'Пообещать, не собираясь выполнять',score:-2}
-  ]}
-];
-const hash=input=>crypto.createHash('sha256').update(String(input)).digest('hex');
+const GLYPH_BY_RUNE={hearth:'glyph_hearth',boundary:'glyph_boundary',silence:'glyph_silence'};
 const demoMode=String(process.env.DEMO_MODE||'1')==='1';
+const hash=input=>crypto.createHash('sha256').update(String(input)).digest('hex');
+const rarityTier={common:1,uncommon:2,rare:3,epic:4,legendary:5};
+const sequences={
+  domovoy:['hearth','boundary','silence'],
+  kikimora:['silence','memory','boundary','truth'],
+  ovinnik:['hearth','ward','sun','boundary','silence'],
+  leshy:['path','boundary','memory','ward','truth'],
+  polevik:['path','sun','silence','ward'],
+  poludnitsa:['sun','ward','truth','boundary','memory','silence'],
+  rusalka:['water','memory','dream','truth','boundary'],
+  vodyanoy:['water','boundary','ward','memory','truth','silence'],
+  bannik:['hearth','water','boundary','silence'],
+  nochnitsa:['dream','silence','ward','memory','truth'],
+  likho:['truth','ward','boundary','memory','dream','silence','path'],
+  mara:['dream','memory','truth','silence','ward','boundary']
+};
+const dialogueThemes={
+  peaceful:{opening:'«С миром ли пришёл, Проводник?»',kind:'Проявить уважение',neutral:'Предложить честный обмен',hostile:'Потребовать подчинения'},
+  tricky:{opening:'«Назови цену своему любопытству…»',kind:'Ответить загадкой',neutral:'Предложить сделку',hostile:'Попытаться перехитрить силой'},
+  hostile:{opening:'Существо скалится и сжимает пространство вокруг себя.',kind:'Показать, что вы не враг',neutral:'Говорить спокойно и твёрдо',hostile:'Угрожать изгнанием'},
+  proud:{opening:'«Кто дал тебе право тревожить хозяина этих мест?»',kind:'Признать его власть',neutral:'Назвать общую цель',hostile:'Оспорить его силу'},
+  restless:{opening:'Существо не задерживается на месте и не слушает длинных речей.',kind:'Подстроиться под его ритм',neutral:'Предложить короткую сделку',hostile:'Попытаться остановить силой'},
+  melancholic:{opening:'«Люди приходят, обещают и забывают…»',kind:'Выслушать и признать боль',neutral:'Предложить память в обмен',hostile:'Обвинить в слабости'},
+  irritable:{opening:'Существо раздражённо предупреждает не нарушать его границы.',kind:'Извиниться и отступить на шаг',neutral:'Предложить полезный дар',hostile:'Ответить раздражением'},
+  mysterious:{opening:'Голос звучит сразу из нескольких сторон.',kind:'Говорить правду',neutral:'Задать осторожный вопрос',hostile:'Попытаться разоблачить угрозой'}
+};
+const offeringByBiome={city:['milk','bread','honey'],park:['bread','honey','bark'],water:['water','honey','mirror'],night:['feather','mirror','salt']};
+
 function haversine(a,b){const R=6371000,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;return 2*R*Math.asin(Math.sqrt(Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2))}
-
-function ensureProfile(p){
-  p.spiritKnowledge ||= {};
-  p.spiritKnowledge.domovoy ||= {knowledge:0,runes:[],trust:0,studies:0,calms:0,banishes:0};
-  p.flags ||= {};
-  if(!p.flags.spiritStarter){
-    p.inventory.milk=(p.inventory.milk||0)+1;
-    p.inventory.bread=(p.inventory.bread||0)+1;
-    p.flags.spiritStarter=true;
-  }
-  return p.spiritKnowledge.domovoy;
-}
-function addItem(p,id,qty=1){p.inventory[id]=(p.inventory[id]||0)+qty}
 function runeInfo(ids){return ids.map(id=>RUNES.find(r=>r.id===id)).filter(Boolean)}
-
-export function demoDomovoyObject(p,lat,lng){
-  if(!demoMode)return null;
-  const day=new Date().toISOString().slice(0,10).replaceAll('-','');
+function addItem(p,id,qty=1){p.inventory[id]=(p.inventory[id]||0)+qty}
+function profileFor(p,creatureId){
+  p.spiritKnowledge ||= {};
+  p.spiritKnowledge[creatureId] ||= {knowledge:0,runes:[],trust:0,studies:0,calms:0,banishes:0,failures:0};
+  p.flags ||= {};
+  if(!p.flags.spiritStarter){p.inventory.milk=(p.inventory.milk||0)+1;p.inventory.bread=(p.inventory.bread||0)+1;p.flags.spiritStarter=true}
+  return p.spiritKnowledge[creatureId];
+}
+function buildDialogue(creature){
+  const theme=dialogueThemes[creature.temperament]||dialogueThemes.mysterious;
+  const offers=offeringByBiome[creature.biome]||offeringByBiome.city;
+  return [
+    {id:'approach',line:theme.opening,options:[
+      {id:'respect',text:theme.kind,score:2},
+      {id:'negotiate',text:theme.neutral,score:1},
+      {id:'provoke',text:theme.hostile,score:-2}
+    ]},
+    {id:'offering',line:`${creature.name} наблюдает за тем, что вы готовы предложить.`,options:[
+      {id:`offer_${offers[0]}`,text:`Предложить: ${offers[0]}`,score:2,item:offers[0]},
+      {id:`offer_${offers[1]}`,text:`Предложить: ${offers[1]}`,score:1,item:offers[1]},
+      {id:'offer_none',text:'Отказаться от дара',score:-1}
+    ]},
+    {id:'promise',line:'Существо требует закрепить намерение словом или поступком.',options:[
+      {id:'honor',text:'Дать честное обещание',score:2},
+      {id:'bargain',text:'Предложить взаимное условие',score:1},
+      {id:'deceive',text:'Попытаться обмануть',score:-2}
+    ]}
+  ];
+}
+function definitionFor(creature){
+  const tier=rarityTier[creature.rarity]||1;
+  const sequence=sequences[creature.id]||['boundary','ward','silence'];
   return {
-    id:`demo_domovoy_${p.id}_${day}`,
-    type:'creature',rarity:'common',biome:'city',creatureId:'domovoy',title:'Домовой — тест AR',
-    lat:Number(lat)+0.00016,lng:Number(lng)+0.00002,startsAt:Date.now(),expiresAt:Date.now()+24*60*60_000,target:1,
-    shared:{value:0,target:1,participants:0,closed:false},completed:false,demoSpirit:true
+    creatureId:creature.id,
+    tier,
+    sequence,
+    slots:sequence.length,
+    maxErrors:Math.max(1,4-Math.floor(tier/2)),
+    study:{targetMs:9000+tier*3000,maxFocusBreaks:Math.max(1,5-tier),motion:1+tier*.2},
+    calm:{dialogue:buildDialogue(creature),successScore:3+tier*.25},
+    ar:{requiredDistance:30,cameraPreferred:true,fallbackAllowed:true}
   };
 }
-function startDemoEncounter(state,p,body){
-  const obj=demoDomovoyObject(p,body.lat,body.lng);
-  if(!obj||body.eventId!==obj.id)throw httpError(404,'Тестовый Домовой не найден');
-  delete p.completed[obj.id];
-  const challengeId=`enc_${crypto.randomUUID()}`,creature=getCreature('domovoy');
-  const challenge={id:challengeId,playerId:p.id,eventId:obj.id,obj,createdAt:Date.now(),expiresAt:Date.now()+5*60_000,type:'spirit',difficulty:1,nonce:hash(challengeId).slice(0,12),spiritPrototype:true};
-  state.encounters[challengeId]=challenge;
-  return {challengeId,type:'spirit',difficulty:1,nonce:challenge.nonce,event:obj,creature};
-}
+export const spiritDefinitions=Object.fromEntries(creatures.map(c=>[c.id,definitionFor(c)]));
 
 export function startSpiritEncounter(state,p,body){
-  const base=String(body.eventId||'').startsWith('demo_domovoy_')?startDemoEncounter(state,p,body):startEncounter(state,p,body);
-  if(base.creature.id!=='domovoy')throw httpError(409,'AR-прототип пока доступен только для Домового');
+  const base=startEncounter(state,p,body),creature=base.creature,definition=spiritDefinitions[creature.id];
+  if(!definition)throw httpError(409,'Для этого существа ещё не создана AR-механика');
   const distance=haversine({lat:Number(body.lat),lng:Number(body.lng)},{lat:base.event.lat,lng:base.event.lng});
-  if(!demoMode&&distance>30){delete state.encounters[base.challengeId];throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`)}
-  const enc=state.encounters[base.challengeId];
-  enc.spiritPrototype=true;enc.expiresAt=Date.now()+5*60_000;
-  const profile=ensureProfile(p);
+  if(!demoMode&&distance>definition.ar.requiredDistance){delete state.encounters[base.challengeId];throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`)}
+  const enc=state.encounters[base.challengeId];enc.spiritPrototype=true;enc.spiritCreatureId=creature.id;enc.expiresAt=Date.now()+7*60_000;
+  const profile=profileFor(p,creature.id),known=new Set(profile.runes);
   return {
     ...base,
-    ar:{requiredDistance:30,currentDistance:Math.round(distance),cameraPreferred:true,fallbackAllowed:true},
+    ar:{...definition.ar,currentDistance:Math.round(distance)},
     interaction:{
       modes:['calm','study','banish'],
       knownRunes:runeInfo(profile.runes),
       runePool:RUNES,
-      banish:{slots:3,sequence:profile.runes.length>=3?DOMOVOY_SEQUENCE:[null,null,null],maxErrors:3},
-      study:{targetMs:12_000,maxFocusBreaks:3},
-      calm:{dialogue:DIALOGUE,treats:Object.entries(TREATS).map(([id,value])=>({id,value,owned:p.inventory[id]||0}))}
+      banish:{slots:definition.slots,sequence:definition.sequence.map(id=>known.has(id)?id:null),maxErrors:definition.maxErrors},
+      study:definition.study,
+      calm:{dialogue:definition.calm.dialogue,successScore:definition.calm.successScore,offerings:offeringByBiome[creature.biome]||offeringByBiome.city}
     },
     spiritProgress:profile
   };
@@ -93,23 +116,46 @@ export function startSpiritEncounter(state,p,body){
 export function resolveSpiritEncounter(state,p,{challengeId,mode,payload={}}){
   const enc=state.encounters[challengeId];
   if(!enc||enc.playerId!==p.id||!enc.spiritPrototype)throw httpError(404,'AR-встреча не найдена');
-  if(enc.obj.creatureId!=='domovoy')throw httpError(409,'Неподдерживаемое существо');
-  const profile=ensureProfile(p);
-  let success=false,score=0.9,choice='study',detail={};
+  const creatureId=enc.spiritCreatureId||enc.obj.creatureId,definition=spiritDefinitions[creatureId];
+  if(!definition)throw httpError(409,'Неподдерживаемое существо');
+  const profile=profileFor(p,creatureId);
+  let success=false,score=.8,choice='study',detail={};
+
   if(mode==='study'){
     const focusMs=Math.max(0,Number(payload.focusMs)||0),breaks=Math.max(0,Number(payload.focusBreaks)||0),observations=Math.max(0,Number(payload.observations)||0);
-    success=focusMs>=10000&&breaks<=3;score=Math.min(1,.65+focusMs/40000+observations*.04-breaks*.05);detail={focusMs,breaks,observations};
-    if(success){profile.studies++;profile.knowledge=Math.min(100,profile.knowledge+Math.min(28,18+observations*3));const unseen=DOMOVOY_SEQUENCE.filter(id=>!profile.runes.includes(id));if(unseen.length){const unlocked=unseen[0];profile.runes.push(unlocked);detail.unlockedRune=RUNES.find(r=>r.id===unlocked)}const roll=parseInt(hash(`${challengeId}|glyph`).slice(0,8),16)/0xffffffff;if(roll<.45){const runeId=DOMOVOY_SEQUENCE[parseInt(hash(challengeId).slice(8,10),16)%DOMOVOY_SEQUENCE.length],glyphId=`glyph_${runeId}`;addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}}
+    success=focusMs>=definition.study.targetMs*.84&&breaks<=definition.study.maxFocusBreaks;
+    score=Math.min(1,.58+focusMs/(definition.study.targetMs*3)+observations*.035-breaks*.045);
+    detail={focusMs,breaks,observations,targetMs:definition.study.targetMs};
+    if(success){
+      profile.studies++;profile.knowledge=Math.min(100,profile.knowledge+Math.max(8,22-definition.tier*2)+observations*2);
+      const unseen=definition.sequence.filter(id=>!profile.runes.includes(id));
+      if(unseen.length){const unlocked=unseen[0];profile.runes.push(unlocked);detail.unlockedRune=RUNES.find(r=>r.id===unlocked)}
+      const roll=parseInt(hash(`${challengeId}|glyph`).slice(0,8),16)/0xffffffff;
+      if(roll<Math.max(.18,.5-definition.tier*.05)){
+        const runeId=definition.sequence[parseInt(hash(challengeId).slice(8,10),16)%definition.sequence.length],glyphId=GLYPH_BY_RUNE[runeId];
+        if(glyphId){addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}
+      }
+    }
   }else if(mode==='calm'){
-    choice='calm';const answers=Array.isArray(payload.answers)?payload.answers:[];let total=0,treat=null;
-    for(const round of DIALOGUE){const selectedId=answers.find(x=>round.options.some(o=>o.id===x)),answer=round.options.find(o=>o.id===selectedId);if(answer){total+=answer.score;if(answer.treat)treat=answer.treat}}
-    if(treat&&(!p.inventory[treat]||p.inventory[treat]<1))throw httpError(409,'Угощения нет в инвентаре');
-    success=total>=3;score=Math.min(1,Math.max(.45,.65+total*.06));if(success){if(treat){p.inventory[treat]--;if(p.inventory[treat]<=0)delete p.inventory[treat]}profile.calms++;profile.trust=Math.min(100,profile.trust+12+Math.max(0,total));profile.knowledge=Math.min(100,profile.knowledge+6)}detail={dialogueScore:total,treatUsed:success?treat:null};
+    choice='calm';const answers=Array.isArray(payload.answers)?payload.answers:[];let total=0,itemUsed=null;
+    for(const round of definition.calm.dialogue){const selected=round.options.find(o=>answers.includes(o.id));if(selected){total+=selected.score;if(selected.item)itemUsed=selected.item}}
+    if(itemUsed&&(!p.inventory[itemUsed]||p.inventory[itemUsed]<1))throw httpError(409,'Выбранного дара нет в инвентаре');
+    success=total>=definition.calm.successScore;score=Math.min(1,Math.max(.4,.58+total*.055-definition.tier*.02));
+    if(success){if(itemUsed){p.inventory[itemUsed]--;if(p.inventory[itemUsed]<=0)delete p.inventory[itemUsed]}profile.calms++;profile.trust=Math.min(100,profile.trust+8+Math.max(0,total)-definition.tier);profile.knowledge=Math.min(100,profile.knowledge+4)}
+    detail={dialogueScore:total,itemUsed:success?itemUsed:null,required:definition.calm.successScore};
   }else if(mode==='banish'){
-    choice='banish';const sequence=Array.isArray(payload.sequence)?payload.sequence:[],errors=Math.max(0,Number(payload.errors)||0),correct=DOMOVOY_SEQUENCE.every((id,index)=>sequence[index]===id);success=correct&&errors<=3;score=correct?Math.max(.7,1-errors*.08):.1;if(success){profile.banishes++;profile.knowledge=Math.min(100,profile.knowledge+4);const roll=parseInt(hash(`${challengeId}|banish`).slice(0,8),16)/0xffffffff;if(roll<.3){addItem(p,'glyph_boundary',1);detail.glyph={itemId:'glyph_boundary',rune:RUNES.find(r=>r.id==='boundary')}}}detail={...detail,correct,errors,expectedSlots:3};
+    choice='banish';const sequence=Array.isArray(payload.sequence)?payload.sequence:[],errors=Math.max(0,Number(payload.errors)||0);
+    const correct=definition.sequence.every((id,index)=>sequence[index]===id);
+    success=correct&&errors<=definition.maxErrors;score=correct?Math.max(.62,1-errors*.07-definition.tier*.015):.08;
+    if(success){profile.banishes++;profile.knowledge=Math.min(100,profile.knowledge+3);const roll=parseInt(hash(`${challengeId}|banish`).slice(0,8),16)/0xffffffff;if(roll<.22){const runeId=definition.sequence[0],glyphId=GLYPH_BY_RUNE[runeId];if(glyphId){addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}}}
+    detail={...detail,correct,errors,expectedSlots:definition.slots,maxErrors:definition.maxErrors};
   }else throw httpError(400,'Неизвестный способ взаимодействия');
-  if(!success){delete state.encounters[challengeId];return {success:false,mode,detail,spiritProgress:profile,retryAfter:10}}
-  const result=resolveEncounter(state,p,{challengeId,score:Math.max(.82,score),choice});result.mode=mode;result.detail=detail;result.spiritProgress=profile;return result;
+
+  if(!success){profile.failures++;delete state.encounters[challengeId];return {success:false,mode,detail,spiritProgress:profile,retryAfter:15}}
+  const result=resolveEncounter(state,p,{challengeId,score:Math.max(.82,score),choice});
+  result.mode=mode;result.detail=detail;result.spiritProgress=profile;result.spiritDefinition={tier:definition.tier,slots:definition.slots};
+  return result;
 }
-export function spiritProfile(p){return ensureProfile(p)}
+
+export function spiritProfile(p){p.spiritKnowledge ||= {};return p.spiritKnowledge}
 export const spiritRunes=RUNES;
