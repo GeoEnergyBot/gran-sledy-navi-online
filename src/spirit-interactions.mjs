@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import './spirit-content.mjs';
 import { startEncounter, resolveEncounter, httpError } from './game-engine.mjs';
 import { creatures } from './catalog.mjs';
 
@@ -14,7 +15,7 @@ const RUNES=[
   {id:'dream',symbol:'ᛗ',name:'Руна сна',color:'indigo'},
   {id:'truth',symbol:'ᚨ',name:'Руна истины',color:'white'}
 ];
-const GLYPH_BY_RUNE={hearth:'glyph_hearth',boundary:'glyph_boundary',silence:'glyph_silence'};
+const GLYPH_BY_RUNE=Object.fromEntries(RUNES.map(r=>[r.id,`glyph_${r.id}`]));
 const demoMode=String(process.env.DEMO_MODE||'1')==='1';
 const hash=input=>crypto.createHash('sha256').update(String(input)).digest('hex');
 const rarityTier={common:1,uncommon:2,rare:3,epic:4,legendary:5};
@@ -43,6 +44,7 @@ const dialogueThemes={
   mysterious:{opening:'Голос звучит сразу из нескольких сторон.',kind:'Говорить правду',neutral:'Задать осторожный вопрос',hostile:'Попытаться разоблачить угрозой'}
 };
 const offeringByBiome={city:['milk','bread','honey'],park:['bread','honey','bark'],water:['water','honey','mirror'],night:['feather','mirror','salt']};
+const offeringNames={milk:'молоко',bread:'хлеб',honey:'мёд',bark:'кору',water:'воду из разлома',mirror:'осколок зеркала',feather:'перо ночницы',salt:'защитную соль'};
 
 function haversine(a,b){const R=6371000,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;return 2*R*Math.asin(Math.sqrt(Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2))}
 function runeInfo(ids){return ids.map(id=>RUNES.find(r=>r.id===id)).filter(Boolean)}
@@ -64,8 +66,8 @@ function buildDialogue(creature){
       {id:'provoke',text:theme.hostile,score:-2}
     ]},
     {id:'offering',line:`${creature.name} наблюдает за тем, что вы готовы предложить.`,options:[
-      {id:`offer_${offers[0]}`,text:`Предложить: ${offers[0]}`,score:2,item:offers[0]},
-      {id:`offer_${offers[1]}`,text:`Предложить: ${offers[1]}`,score:1,item:offers[1]},
+      {id:`offer_${offers[0]}`,text:`Предложить ${offeringNames[offers[0]]||offers[0]}`,score:2,item:offers[0]},
+      {id:`offer_${offers[1]}`,text:`Предложить ${offeringNames[offers[1]]||offers[1]}`,score:1,item:offers[1]},
       {id:'offer_none',text:'Отказаться от дара',score:-1}
     ]},
     {id:'promise',line:'Существо требует закрепить намерение словом или поступком.',options:[
@@ -79,10 +81,7 @@ function definitionFor(creature){
   const tier=rarityTier[creature.rarity]||1;
   const sequence=sequences[creature.id]||['boundary','ward','silence'];
   return {
-    creatureId:creature.id,
-    tier,
-    sequence,
-    slots:sequence.length,
+    creatureId:creature.id,tier,sequence,slots:sequence.length,
     maxErrors:Math.max(1,4-Math.floor(tier/2)),
     study:{targetMs:9000+tier*3000,maxFocusBreaks:Math.max(1,5-tier),motion:1+tier*.2},
     calm:{dialogue:buildDialogue(creature),successScore:3+tier*.25},
@@ -92,7 +91,9 @@ function definitionFor(creature){
 export const spiritDefinitions=Object.fromEntries(creatures.map(c=>[c.id,definitionFor(c)]));
 
 export function startSpiritEncounter(state,p,body){
-  const base=startEncounter(state,p,body),creature=base.creature,definition=spiritDefinitions[creature.id];
+  const base=startEncounter(state,p,body);
+  if(!['trace','creature'].includes(base.event.type)){delete state.encounters[base.challengeId];throw httpError(409,'AR-встреча доступна только для следов и существ')}
+  const creature=base.creature,definition=spiritDefinitions[creature.id];
   if(!definition)throw httpError(409,'Для этого существа ещё не создана AR-механика');
   const distance=haversine({lat:Number(body.lat),lng:Number(body.lng)},{lat:base.event.lat,lng:base.event.lng});
   if(!demoMode&&distance>definition.ar.requiredDistance){delete state.encounters[base.challengeId];throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`)}
@@ -100,11 +101,10 @@ export function startSpiritEncounter(state,p,body){
   const profile=profileFor(p,creature.id),known=new Set(profile.runes);
   return {
     ...base,
+    spiritDefinition:{tier:definition.tier,slots:definition.slots},
     ar:{...definition.ar,currentDistance:Math.round(distance)},
     interaction:{
-      modes:['calm','study','banish'],
-      knownRunes:runeInfo(profile.runes),
-      runePool:RUNES,
+      modes:['calm','study','banish'],knownRunes:runeInfo(profile.runes),runePool:RUNES,
       banish:{slots:definition.slots,sequence:definition.sequence.map(id=>known.has(id)?id:null),maxErrors:definition.maxErrors},
       study:definition.study,
       calm:{dialogue:definition.calm.dialogue,successScore:definition.calm.successScore,offerings:offeringByBiome[creature.biome]||offeringByBiome.city}
@@ -133,7 +133,7 @@ export function resolveSpiritEncounter(state,p,{challengeId,mode,payload={}}){
       const roll=parseInt(hash(`${challengeId}|glyph`).slice(0,8),16)/0xffffffff;
       if(roll<Math.max(.18,.5-definition.tier*.05)){
         const runeId=definition.sequence[parseInt(hash(challengeId).slice(8,10),16)%definition.sequence.length],glyphId=GLYPH_BY_RUNE[runeId];
-        if(glyphId){addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}
+        addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)};
       }
     }
   }else if(mode==='calm'){
@@ -147,7 +147,7 @@ export function resolveSpiritEncounter(state,p,{challengeId,mode,payload={}}){
     choice='banish';const sequence=Array.isArray(payload.sequence)?payload.sequence:[],errors=Math.max(0,Number(payload.errors)||0);
     const correct=definition.sequence.every((id,index)=>sequence[index]===id);
     success=correct&&errors<=definition.maxErrors;score=correct?Math.max(.62,1-errors*.07-definition.tier*.015):.08;
-    if(success){profile.banishes++;profile.knowledge=Math.min(100,profile.knowledge+3);const roll=parseInt(hash(`${challengeId}|banish`).slice(0,8),16)/0xffffffff;if(roll<.22){const runeId=definition.sequence[0],glyphId=GLYPH_BY_RUNE[runeId];if(glyphId){addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}}}
+    if(success){profile.banishes++;profile.knowledge=Math.min(100,profile.knowledge+3);const roll=parseInt(hash(`${challengeId}|banish`).slice(0,8),16)/0xffffffff;if(roll<.22){const runeId=definition.sequence[0],glyphId=GLYPH_BY_RUNE[runeId];addItem(p,glyphId,1);detail.glyph={itemId:glyphId,rune:RUNES.find(r=>r.id===runeId)}}}
     detail={...detail,correct,errors,expectedSlots:definition.slots,maxErrors:definition.maxErrors};
   }else throw httpError(400,'Неизвестный способ взаимодействия');
 
