@@ -24,6 +24,12 @@ export const items = [
   { id:'salt', name:'Защитная соль', icon:'∴', type:'material', rarity:'common', tradable:true, description:'Основа защитных кругов.' },
   { id:'sunstone', name:'Камень Полудницы', icon:'☼', type:'material', rarity:'epic', tradable:true, description:'Хранит сухой полуденный жар.' },
   { id:'voidshard', name:'Осколок пустоты', icon:'⬖', type:'material', rarity:'legendary', tradable:true, description:'Фрагмент границы между мирами.' },
+  { id:'milk', name:'Миска молока', icon:'◒', type:'treat', rarity:'common', tradable:true, description:'Простое угощение для домашних духов.' },
+  { id:'bread', name:'Свежий хлеб', icon:'▰', type:'treat', rarity:'common', tradable:true, description:'Домовые ценят хлеб, оставленный с уважением.' },
+  { id:'honey', name:'Ложка мёда', icon:'⬡', type:'treat', rarity:'uncommon', tradable:true, description:'Редкое угощение, повышающее доверие духов.' },
+  { id:'glyph_hearth', name:'Глиф очага', icon:'ᛟ', type:'glyph', rarity:'uncommon', tradable:true, description:'Физический носитель руны очага.' },
+  { id:'glyph_boundary', name:'Глиф границы', icon:'ᛉ', type:'glyph', rarity:'uncommon', tradable:true, description:'Укрепляет границу между Явью и Навью.' },
+  { id:'glyph_silence', name:'Глиф тишины', icon:'ᛏ', type:'glyph', rarity:'uncommon', tradable:true, description:'Подавляет шёпот и тревогу сущностей.' },
   { id:'chalk', name:'Ритуальный мел', icon:'╱', type:'consumable', rarity:'common', tradable:true, description:'Увеличивает точность ритуала.', effects:{ritualBonus:0.08} },
   { id:'incense', name:'Благовоние троп', icon:'≈', type:'consumable', rarity:'uncommon', tradable:true, description:'На 20 минут увеличивает радиус сканера.', effects:{scanRadius:150} },
   { id:'healing_salt', name:'Соль возвращения', icon:'✣', type:'consumable', rarity:'rare', tradable:true, description:'Снимает одно проклятие.' },
@@ -41,7 +47,10 @@ export const recipes = [
   { id:'craft_silver_amulet', name:'Серебряная нить', profession:'warder', level:2, inputs:{thread:5, mirror:2, water:1}, output:{itemId:'silver_thread_amulet', qty:1}, time:0 },
   { id:'craft_raven_eye', name:'Глаз Ворона', profession:'artifactsmith', level:2, inputs:{feather:4, bone:2, mirror:2}, output:{itemId:'raven_eye', qty:1}, time:0 },
   { id:'craft_noon_stone', name:'Камень Полудницы', profession:'artifactsmith', level:3, inputs:{sunstone:1, ash:8, bone:2}, output:{itemId:'noon_stone', qty:1}, time:0 },
-  { id:'craft_mirror_compass', name:'Зеркальный компас', profession:'runewriter', level:3, inputs:{mirror:5, thread:5, voidshard:1}, output:{itemId:'mirror_compass', qty:1}, time:0 }
+  { id:'craft_mirror_compass', name:'Зеркальный компас', profession:'runewriter', level:3, inputs:{mirror:5, thread:5, voidshard:1}, output:{itemId:'mirror_compass', qty:1}, time:0 },
+  { id:'craft_glyph_hearth', name:'Глиф очага', profession:'runewriter', level:1, inputs:{ash:2, chalk:1, thread:1}, output:{itemId:'glyph_hearth', qty:1}, time:0 },
+  { id:'craft_glyph_boundary', name:'Глиф границы', profession:'runewriter', level:1, inputs:{salt:2, chalk:1, ash:1}, output:{itemId:'glyph_boundary', qty:1}, time:0 },
+  { id:'craft_glyph_silence', name:'Глиф тишины', profession:'runewriter', level:1, inputs:{thread:2, chalk:1, ash:1}, output:{itemId:'glyph_silence', qty:1}, time:0 }
 ];
 
 export const professions = [
