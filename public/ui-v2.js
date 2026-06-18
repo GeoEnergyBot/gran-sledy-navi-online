@@ -4,10 +4,8 @@
   const $=s=>document.querySelector(s);
   const typeBySymbol={'⌁':'trace','◉':'creature','✦':'resource','◇':'artifact','⬡':'rift'};
   const near=(a,b)=>Math.abs(Number(a.lat)-Number(b.lat))<0.00002&&Math.abs(Number(a.lng)-Number(b.lng))<0.00002;
-
   if(window.L?.map){const originalMap=window.L.map;window.L.map=function(...args){const map=originalMap.apply(this,args);UI.map=map;window.__granMap=map;map.on('zoomend',updateMarkerDensity);return map}}
   if(window.L?.marker){const originalMarker=window.L.marker;window.L.marker=function(latlng,options){const marker=originalMarker.call(this,latlng,options);marker.on('click',()=>{const ll=marker.getLatLng();const obj=UI.world.find(x=>near(x,ll));if(obj){core.selectEvent(obj.id);setTimeout(()=>{const root=$('#sheetContent');if(root){root.dataset.eventId=obj.id;core.emit('sheet:event-opened',obj)}},0)}});return marker}}
-
   function distanceM(a,b){const R=6371000,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;return 2*R*Math.asin(Math.sqrt(Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2))}
   function formatDistance(n){return n<1000?`${Math.round(n)} м`:`${(n/1000).toFixed(1)} км`}
   function walkTime(n){return Math.max(1,Math.round(n/75))}
@@ -16,7 +14,6 @@
   function focusSelectedMarker(host){document.querySelectorAll('.world-marker').forEach(x=>{x.classList.remove('ui-active');x.classList.add('ui-dim')});const marker=host.querySelector('.world-marker');if(marker){marker.classList.remove('ui-dim');marker.classList.add('ui-active')}}
   function clearFocus(){document.querySelectorAll('.world-marker').forEach(x=>x.classList.remove('ui-active','ui-dim'))}
   function updateMarkerDensity(){classifyMarkers();const zoom=UI.map?.getZoom?.()||16,limit=zoom>=18?28:zoom>=17?20:14;const hosts=[...document.querySelectorAll('.leaflet-marker-icon')].filter(x=>x.querySelector('.world-marker'));hosts.forEach((host,index)=>host.classList.toggle('ui-hidden-marker',index>=limit))}
-  function createMapMenu(){const view=$('.view[data-view="map"]');if(!view||$('.ui-map-menu'))return;const btn=document.createElement('button');btn.className='ui-map-menu';btn.type='button';btn.setAttribute('aria-label','Фильтры карты');btn.textContent='☷';btn.onclick=()=>{const legend=$('.map-legend');if(!legend)return;legend.classList.toggle('ui-open');btn.classList.toggle('active',legend.classList.contains('ui-open'))};view.append(btn)}
   function removeOldRoute(){if(UI.routeLine){try{UI.routeLine.remove()}catch{}UI.routeLine=null}UI.routeTarget=null;core.state.routeEventId=null;$('.ui-route-card')?.remove();clearFocus();core.emit('route:changed',null)}
   function buildInternalRoute(obj){if(!obj||!UI.map||!window.L)return;removeOldRoute();UI.routeTarget=obj;core.state.routeEventId=obj.id;const from=[UI.position.lat,UI.position.lng],to=[obj.lat,obj.lng];UI.routeLine=L.polyline([from,to],{color:'#77e0a2',weight:5,opacity:.92,dashArray:'10 10',className:'ui-route-line'}).addTo(UI.map);UI.map.fitBounds(L.latLngBounds([from,to]).pad(.28),{animate:true,maxZoom:17});const view=$('.view[data-view="map"]'),card=document.createElement('div');card.className='ui-route-card';const d=distanceM(UI.position,obj);card.innerHTML=`<div class="route-icon">⌖</div><div><b>${obj.title||'Выбранная цель'}</b><small>${formatDistance(d)} · около ${walkTime(d)} мин пешком · маршрут внутри игры</small></div><button type="button">Скрыть</button>`;card.querySelector('button').onclick=removeOldRoute;view.append(card);$('#sheetClose')?.click();core.emit('route:changed',obj);try{window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium')}catch{navigator.vibrate?.(20)}}
   function interceptRoutes(){document.addEventListener('click',event=>{const route=event.target.closest('.route-btn');if(route){event.preventDefault();event.stopImmediatePropagation();buildInternalRoute(currentObject());return}if(event.target.closest('#sheetClose,#sheetBackdrop'))clearFocus()},true)}
@@ -25,5 +22,5 @@
   core.on('world:loaded',data=>{UI.world=data.objects||[];setTimeout(()=>{classifyMarkers();updateMarkerDensity()},0)});
   core.on('position:updated',position=>{UI.position=position});
   core.on('route:request',buildInternalRoute);
-  window.addEventListener('load',()=>{createMapMenu();interceptRoutes();watchPosition();observeMap();$('.first-session-hint')?.remove();setTimeout(()=>{classifyMarkers();updateMarkerDensity()},1000)});
+  window.addEventListener('load',()=>{interceptRoutes();watchPosition();observeMap();$('.ui-map-menu')?.remove();$('.first-session-hint')?.remove();setTimeout(()=>{classifyMarkers();updateMarkerDensity()},1000)});
 })();
