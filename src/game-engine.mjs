@@ -147,7 +147,7 @@ function findWorldObject(eventId, lat, lng){
   return null;
 }
 
-function locationProof(p, lat, lng){
+function locationProof(p, lat, lng, accuracy=p.lastPosition?.accuracy){
   const now=Date.now();
   const prev=p.lastPosition;
   let suspicious=false, distance=0, speed=0;
@@ -155,16 +155,21 @@ function locationProof(p, lat, lng){
     distance=haversine(prev.lat,prev.lng,lat,lng);
     const seconds=Math.max(1,(now-prev.at)/1000); speed=distance/seconds;
     suspicious = distance>2500 && seconds<180 || speed>45;
-    if(!suspicious && speed<12) p.stats.distanceM += distance;
+    if(suspicious)return {suspicious,distance,speed};
+    if(speed<12) p.stats.distanceM += distance;
   }
-  p.lastPosition={lat,lng,at:now};
+  p.lastPosition={lat,lng,accuracy:accuracy!==null&&accuracy!==undefined&&accuracy!==''&&Number.isFinite(Number(accuracy))?Number(accuracy):null,at:now};
   return {suspicious,distance,speed};
 }
 
-export function heartbeat(state,p,lat,lng){
+export function heartbeat(state,p,lat,lng,accuracy){
   lat=Number(lat);lng=Number(lng);
   if(!Number.isFinite(lat)||!Number.isFinite(lng)) throw httpError(400,'Некорректные координаты');
-  locationProof(p,lat,lng);
+  const hasAccuracy=accuracy!==null&&accuracy!==undefined&&accuracy!=='';
+  const reportedAccuracy=Number(accuracy);
+  if(!demoMode&&(!hasAccuracy||!Number.isFinite(reportedAccuracy)||reportedAccuracy<=0||reportedAccuracy>200))throw httpError(403,'Недостаточная точность GPS. Перейдите на открытое место и повторите попытку.');
+  const proof=locationProof(p,lat,lng,reportedAccuracy);
+  if(proof.suspicious&&!demoMode)throw httpError(403,'Перемещение выглядит слишком быстрым. Остановитесь и повторите попытку.');
   state.presence[p.id]={playerId:p.id,name:p.name,level:p.level,lat,lng,updatedAt:Date.now(),circleId:p.circleId};
   const nearby=Object.values(state.presence).filter(x=>x.playerId!==p.id && Date.now()-x.updatedAt<120000 && haversine(lat,lng,x.lat,x.lng)<1500);
   return {count:nearby.length, players:nearby.slice(0,12).map(x=>({name:x.name,level:x.level,distance:Math.round(haversine(lat,lng,x.lat,x.lng)/50)*50,circleId:x.circleId}))};
@@ -172,18 +177,31 @@ export function heartbeat(state,p,lat,lng){
 
 export function startEncounter(state,p,{eventId,lat,lng}){
   lat=Number(lat);lng=Number(lng);
+  if(!demoMode){
+    const last=p.lastPosition,age=last?Date.now()-last.at:Infinity;
+    if(!last||age>90_000)throw httpError(403,'Сначала подтвердите своё положение через GPS.');
+    if(!Number.isFinite(last.accuracy)||last.accuracy>200)throw httpError(403,'Недостаточная точность GPS. Перейдите на открытое место и повторите попытку.');
+    if(haversine(last.lat,last.lng,lat,lng)>100)throw httpError(403,'Положение изменилось. Обновите GPS и попробуйте снова.');
+  }
   const proof=locationProof(p,lat,lng);
   const obj=findWorldObject(eventId,lat,lng);
   if(!obj) throw httpError(404,'Событие исчезло или находится слишком далеко');
+  if(Date.now()<obj.startsAt||Date.now()>obj.expiresAt)throw httpError(410,'Событие уже завершилось. Обновите карту.');
   const distance=haversine(lat,lng,obj.lat,obj.lng);
   if(!demoMode && distance>140) throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`);
   if(proof.suspicious && !demoMode) throw httpError(403,'Не удалось подтвердить перемещение');
+  if(obj.type==='rift'){
+    const progress=state.worldProgress[obj.id];
+    if(progress?.closed)throw httpError(409,'Этот разлом уже закрыт. Найдите следующий.');
+    const last=progress?.lastByPlayer?.[p.id]||0;
+    if(Date.now()-last<60_000)throw httpError(429,'Вклад в этот разлом можно внести раз в минуту.');
+  }
   if(p.completed[eventId] && obj.type!=='rift') throw httpError(409,'Вы уже исследовали это событие');
   const challengeId=uid('enc');
   const creature=getCreature(obj.creatureId);
   const type=obj.type==='resource'?'signal':obj.type==='artifact'?'ritual':creature.encounter;
   const difficulty=rarities[obj.rarity].weight;
-  const challenge={id:challengeId,playerId:p.id,eventId,obj,createdAt:Date.now(),expiresAt:Date.now()+120000,type,difficulty,nonce:hashHex(challengeId).slice(0,12)};
+  const challenge={id:challengeId,playerId:p.id,eventId,obj,createdAt:Date.now(),expiresAt:Date.now()+120000,type,difficulty,nonce:hashHex(challengeId).slice(0,12),minDurationMs:demoMode?0:4000};
   state.encounters[challengeId]=challenge;
   return {challengeId,type,difficulty,nonce:challenge.nonce,event:obj,creature};
 }
@@ -208,14 +226,20 @@ function generateArtifact(obj,p){
   };
 }
 
-export function resolveEncounter(state,p,{challengeId,score,choice='study'}){
+export function resolveEncounter(state,p,{challengeId,score,choice='study'},{spiritValidated=false}={}){
   const enc=state.encounters[challengeId];
   if(!enc || enc.playerId!==p.id) throw httpError(404,'Испытание не найдено');
+  if(enc.spiritPrototype&&!spiritValidated)throw httpError(409,'Завершите встречу через выбранный способ взаимодействия.');
   if(Date.now()>enc.expiresAt) {delete state.encounters[challengeId]; throw httpError(410,'Время испытания истекло');}
+  if(!['calm','study','banish'].includes(choice))throw httpError(400,'Неизвестный исход встречи');
+  const elapsed=Date.now()-enc.createdAt;
+  if(elapsed<(enc.minDurationMs||0))throw httpError(409,'Испытание завершилось слишком быстро. Продолжите встречу и попробуйте снова.');
   score=clamp(Number(score)||0,0,1);
+  if(!spiritValidated&&!demoMode)score=Math.min(score,clamp(.45+elapsed/25_000,.45,1));
   const required=clamp(0.42 + (enc.difficulty-1)*0.08,0.42,0.78);
   if(score<required) { delete state.encounters[challengeId]; return {success:false,required,retryAfter:8}; }
   const obj=enc.obj, creature=getCreature(obj.creatureId), mult=rarities[obj.rarity].reward;
+  if(obj.type!=='rift'&&p.completed[obj.id])throw httpError(409,'Вы уже получили награду за это событие.');
   const choiceBonus=choice===creature.preferred?1.25:1;
   const reward={eventId:obj.id,xp:Math.round(22*mult*choiceBonus),essence:Math.round(6*mult),signs:0,items:{},artifact:null};
   if(obj.type==='resource'){
@@ -229,8 +253,11 @@ export function resolveEncounter(state,p,{challengeId,score,choice='study'}){
   }
   if(obj.type==='rift'){
     const amount=Math.round((70+score*80)*mult);
-    const wp=state.worldProgress[obj.id] ||= {value:0,participants:{},closed:false};
+    const wp=state.worldProgress[obj.id] ||= {value:0,participants:{},lastByPlayer:{},closed:false};
+    if(wp.closed)throw httpError(409,'Этот разлом уже закрыт.');
+    if(Date.now()-(wp.lastByPlayer?.[p.id]||0)<60_000)throw httpError(429,'Вклад в этот разлом можно внести раз в минуту.');
     wp.value=clamp(wp.value+amount,0,obj.target); wp.participants[p.id]=(wp.participants[p.id]||0)+amount;
+    wp.lastByPlayer||={};wp.lastByPlayer[p.id]=Date.now();
     wp.closed=wp.value>=obj.target;
     p.stats.riftContribution += amount; progressQuest(p,'rift',amount);
     if(p.circleId && state.circles[p.circleId]){ const circle=state.circles[p.circleId]; circle.mission.progress=clamp(circle.mission.progress+amount,0,circle.mission.target); circle.reputation+=Math.round(amount/20); }
@@ -283,12 +310,21 @@ function tradableQty(p,itemId){
   let qty=p.inventory[itemId]||0; for(const x of Object.values(p.equipment)) if(x===itemId) qty--; return Math.max(0,qty);
 }
 
-export function marketListings(state,filters={}){
-  return Object.values(state.market.listings).filter(x=>x.status==='active' && (!filters.itemId||x.itemId===filters.itemId)).sort((a,b)=>a.price-b.price||b.createdAt-a.createdAt).slice(0,200);
+export function publicMarketListing(listing,viewer){
+  const {sellerId,buyerId,...visible}=listing;
+  if(visible.artifact){
+    const {owners,...artifact}=visible.artifact;
+    visible.artifact={...artifact,ownerCount:Array.isArray(owners)?owners.length:0};
+  }
+  return {...visible,isSeller:sellerId===viewer?.id};
+}
+
+export function marketListings(state,filters={},viewer){
+  return Object.values(state.market.listings).filter(x=>x.status==='active' && (!filters.itemId||x.itemId===filters.itemId)).sort((a,b)=>a.price-b.price||b.createdAt-a.createdAt).slice(0,200).map(x=>publicMarketListing(x,viewer));
 }
 
 export function createListing(state,p,{itemId,artifactId,qty=1,price}){
-  price=Math.floor(Number(price)); qty=Math.floor(Number(qty)); if(price<1||price>1_000_000||qty<1||qty>999) throw httpError(400,'Некорректная цена или количество');
+  price=Number(price);qty=Number(qty);if(!Number.isSafeInteger(price)||price<1||price>1_000_000||!Number.isSafeInteger(qty)||qty<1||qty>999)throw httpError(400,'Цена и количество должны быть целыми числами в допустимом диапазоне.');
   let listing;
   if(artifactId){
     const idx=p.uniqueArtifacts.findIndex(a=>a.id===artifactId); if(idx<0) throw httpError(404,'Артефакт не найден');
@@ -325,10 +361,10 @@ export function createCircle(state,p,{name}){
 export function joinCircle(state,p,{code}){
   if(p.circleId) throw httpError(409,'Вы уже состоите в Круге'); const c=Object.values(state.circles).find(x=>x.code===String(code||'').toUpperCase()); if(!c) throw httpError(404,'Круг не найден'); if(c.members.length>=50) throw httpError(409,'Круг заполнен'); c.members.push(p.id);p.circleId=c.id;return c;
 }
-export function getCircle(state,p){ const c=p.circleId?state.circles[p.circleId]:null; if(!c)return null; return {...c,members:c.members.map(id=>{const x=state.players[id];return x?{id:x.id,name:x.name,level:x.level}:null}).filter(Boolean)}; }
+export function getCircle(state,p){ const c=p.circleId?state.circles[p.circleId]:null; if(!c)return null; const {leaderId,...visible}=c; return {...visible,isLeader:leaderId===p.id,members:c.members.map(id=>{const x=state.players[id];return x?{name:x.name,level:x.level}:null}).filter(Boolean)}; }
 
 export function bootstrap(state,p){
-  return {player:publicPlayer(p),catalog:{creatures,items,recipes,professions,rarities},market:marketListings(state),circle:getCircle(state,p),server:{time:Date.now(),demoMode,cryptoEnabled:String(process.env.ENABLE_CRYPTO||'0')==='1',commissionPercent:commission*100}};
+  return {player:publicPlayer(p),catalog:{creatures,items,recipes,professions,rarities},market:marketListings(state,{},p),circle:getCircle(state,p),server:{time:Date.now(),demoMode,cryptoEnabled:String(process.env.ENABLE_CRYPTO||'0')==='1',commissionPercent:commission*100}};
 }
 
 export function cryptoStatus(){

@@ -1,6 +1,6 @@
 {
   "name": "gran-sledy-navi-mmo",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "type": "module",
   "description": "Многопользовательская геолокационная RPG с единым серверным миром, ремеслом и рынком игроков.",

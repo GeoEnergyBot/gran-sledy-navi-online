@@ -21,6 +21,7 @@ DEMO_MODE=1
 WORLD_SEED=СЛУЧАЙНЫЙ_СЕКРЕТ
 MARKET_COMMISSION_PERCENT=7
 ENABLE_CRYPTO=0
+BACKUP_RETENTION_DAYS=7
 ```
 
 `PORT` не задавайте: Railway передаёт его приложению автоматически.
@@ -32,8 +33,17 @@ BOT_TOKEN=ТОКЕН_НОВОГО_TELEGRAM_БОТА
 DEMO_MODE=0
 ```
 
+На production не оставляйте `DEMO_MODE=1`: он разрешает гостевую авторизацию. Храните `BOT_TOKEN` только в Railway Variables и задайте случайный `WORLD_SEED`.
+
+## Кнопка запуска в Telegram
+
+В `@BotFather` выберите бота → **Bot Settings → Menu Button → Configure menu button**. Укажите подпись, например «Открыть игру», и Railway URL `https://ВАШ-ДОМЕН/`. Проверьте запуск именно в Telegram на телефоне: `/health` доступен без входа, а игровая API требует валидный Telegram `initData`.
+
 ## Проверка
 
 - `https://ВАШ-ДОМЕН/health` должно вернуть JSON с `"ok": true`.
-- Главная страница должна открыть карту.
+- `https://ВАШ-ДОМЕН/ready` должно вернуть JSON с `"ok": true`.
+- Menu Button бота должна открыть Mini App, загрузить профиль и карту, затем разрешить GPS по согласию игрока.
+- Проверьте запуск с кириллическим Telegram-именем, отказ GPS, потерю сети и повторное подключение.
 - В двух разных браузерах в режиме `DEMO_MODE=1` создаются разные тестовые игроки, но они видят общий мир и рынок.
+- Ежедневные снимки JSON создаются на Volume в `/data/backups`; это не замена копии за пределами Railway.

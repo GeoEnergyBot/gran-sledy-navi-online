@@ -48,6 +48,8 @@ try{
     const result=await api('researcher','/api/spirit/study-check',{challengeId:studyStart.challengeId,pointId:point.id,toolId:point.toolId});
     assert.equal(result.correct,true);
   }
+  // Production validates claimed focus time against server elapsed time.
+  await new Promise(resolve=>setTimeout(resolve,studyStart.interaction.study.targetMs+100));
   const study=await api('researcher','/api/spirit/resolve',{challengeId:studyStart.challengeId,mode:'study',payload:{focusMs:studyStart.interaction.study.targetMs,focusBreaks:0,observations:points.length}});
   assert.equal(study.success,true);
   assert.equal(study.mode,'study');

@@ -10,7 +10,7 @@
     initData:tg?.initData||''
   };
   const listeners=new Map();
-  const state={world:[],district:null,player:null,position:{lat:43.238949,lng:76.889709},selectedEventId:null,routeEventId:null,realtime:'idle'};
+  const state={world:[],district:null,player:null,position:{lat:0,lng:0},hasPosition:false,selectedEventId:null,routeEventId:null,realtime:'idle'};
   const nativeFetch=window.fetch.bind(window);
 
   function on(type,fn){
@@ -23,8 +23,9 @@
     window.dispatchEvent(new CustomEvent(`gran:${type}`,{detail:payload}));
   }
   function authHeaders(extra={}){
-    const headers={'content-type':'application/json','x-player-id':identity.id,'x-player-name':identity.name,...extra};
+    const headers={'content-type':'application/json',...extra};
     if(identity.initData)headers['x-telegram-init-data']=identity.initData;
+    else {headers['x-player-id']=identity.id;headers['x-player-name']=encodeURIComponent(identity.name)}
     return headers;
   }
   function classify(path){
@@ -32,7 +33,7 @@
   }
   async function coreFetch(input,options={}){
     const path=classify(typeof input==='string'?input:input.url);
-    const requestOptions={...options,headers:authHeaders(options.headers||{})};
+    const requestOptions={...options,headers:path.startsWith('/api/')?authHeaders(options.headers||{}):options.headers};
     const response=await nativeFetch(input,requestOptions);
     if(path.startsWith('/api/')&&path!=='/api/stream'){
       try{
@@ -63,6 +64,7 @@
   function setPosition(position){
     if(!Number.isFinite(position?.lat)||!Number.isFinite(position?.lng))return;
     state.position={lat:Number(position.lat),lng:Number(position.lng)};
+    state.hasPosition=true;
     emit('position:updated',state.position);
   }
   function selectEvent(eventId){state.selectedEventId=eventId||null;emit('event:selected',state.selectedEventId)}
