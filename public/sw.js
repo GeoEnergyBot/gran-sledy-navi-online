@@ -1,7 +1,8 @@
-const CACHE='gran-shell-v19';
+const CACHE='gran-shell-v20';
 const SHELL=[
   '/',
   '/styles.css?v=6',
+  '/startup.css?v=1',
   '/stable-core.js?v=2',
   '/app.js?v=6',
   '/onboarding.css?v=2',

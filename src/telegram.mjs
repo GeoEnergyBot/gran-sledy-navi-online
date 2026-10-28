@@ -30,6 +30,8 @@ export function resolveIdentity(req, env){
   if (!env.DEMO_MODE) return null;
   const rawId = String(req.headers['x-player-id'] || '').replace(/[^a-zA-Z0-9:_-]/g,'').slice(0,80);
   if (!rawId) return null;
-  const rawName = String(req.headers['x-player-name'] || 'Проводник').replace(/[<>]/g,'').slice(0,40);
+  let suppliedName = String(req.headers['x-player-name'] || 'Проводник');
+  try { suppliedName = decodeURIComponent(suppliedName); } catch { suppliedName = 'Проводник'; }
+  const rawName = suppliedName.replace(/[<>\u0000-\u001f\u007f]/g,'').trim().slice(0,40) || 'Проводник';
   return { id:`demo:${rawId}`, name:rawName, username:'', verified:false };
 }

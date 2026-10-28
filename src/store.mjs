@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve('data');
 const STATE_PATH = path.join(DATA_DIR, 'state.json');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const CURRENT_VERSION = 6;
 
 function emptyState(){
@@ -53,10 +54,12 @@ function migrateState(input){
 export class JsonStore {
   constructor(){
     fs.mkdirSync(DATA_DIR, {recursive:true});
-    if (!fs.existsSync(STATE_PATH)) fs.writeFileSync(STATE_PATH, JSON.stringify(emptyState(), null, 2));
+    const hadState=fs.existsSync(STATE_PATH);
+    if (!hadState) fs.writeFileSync(STATE_PATH, JSON.stringify(emptyState(), null, 2));
     this.state = migrateState(this.#read());
     this.queue = Promise.resolve();
     this.dirty = false;
+    if(hadState)this.#backupBeforeWrite();
     fs.writeFileSync(STATE_PATH, JSON.stringify(this.state, null, 2));
   }
 
@@ -65,8 +68,7 @@ export class JsonStore {
     catch (error){
       const backup = `${STATE_PATH}.broken-${Date.now()}`;
       try { fs.copyFileSync(STATE_PATH, backup); } catch {}
-      console.error('State file was invalid; starting a new state.', error);
-      return emptyState();
+      throw new Error(`State file is invalid; preserved a recovery copy at ${backup}. Refusing to start with empty player data.`, {cause:error});
     }
   }
 
@@ -74,10 +76,11 @@ export class JsonStore {
     let result;
     let failure;
     this.queue = this.queue.then(async()=>{
+      const before = structuredClone(this.state);
       try {
         result = await fn(this.state);
         await this.save();
-      } catch (error){ failure = error; }
+      } catch (error){ this.state = before; failure = error; }
     });
     await this.queue;
     if (failure) throw failure;
@@ -92,8 +95,29 @@ export class JsonStore {
   async save(){
     const temp = `${STATE_PATH}.tmp`;
     const json = JSON.stringify(this.state, null, 2);
+    this.#backupBeforeWrite();
     fs.writeFileSync(temp, json);
     fs.renameSync(temp, STATE_PATH);
+  }
+
+  #backupBeforeWrite(){
+    if(!fs.existsSync(STATE_PATH))return;
+    const now=new Date(),day=now.toISOString().slice(0,10),backup=path.join(BACKUP_DIR,`state-${day}.json`);
+    if(fs.existsSync(backup))return;
+    fs.mkdirSync(BACKUP_DIR,{recursive:true});
+    fs.copyFileSync(STATE_PATH,backup);
+    const keep=Math.max(1,Math.min(30,Number(process.env.BACKUP_RETENTION_DAYS)||7));
+    const cutoff=Date.now()-keep*24*60*60*1000;
+    for(const name of fs.readdirSync(BACKUP_DIR)){
+      if(!/^state-\d{4}-\d{2}-\d{2}\.json$/.test(name))continue;
+      const file=path.join(BACKUP_DIR,name);
+      try{if(fs.statSync(file).mtimeMs<cutoff)fs.rmSync(file)}catch{}
+    }
+  }
+
+  health(){
+    try{fs.accessSync(DATA_DIR,fs.constants.R_OK|fs.constants.W_OK);fs.accessSync(STATE_PATH,fs.constants.R_OK|fs.constants.W_OK);return {ok:true,kind:'json-volume'}}
+    catch{return {ok:false,kind:'json-volume'}}
   }
 
   snapshot(){ return structuredClone(this.state); }

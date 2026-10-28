@@ -86,6 +86,7 @@ function showOnboarding(){
     </div>`;
     overlay.querySelector('.onboarding-skip').onclick=finish;
     overlay.querySelector('.onboarding-next').onclick=()=>{if(index<slides.length-1){index++;render()}else finish()};
+    overlay.querySelector('.onboarding-next').focus();
   }
   render();
 }
