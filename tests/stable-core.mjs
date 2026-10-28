@@ -51,14 +51,14 @@ try{
 
   await new Promise(r=>setTimeout(r,100));
   const state=JSON.parse(await readFile(path.join(temp,'state.json'),'utf8'));
-  assert.equal(state.version,5);
+  assert.equal(state.version,6);
   assert.ok(state.districts&&typeof state.districts==='object');
 
   console.log('✓ anonymous API rejected');
   console.log('✓ authorized district and world');
   console.log('✓ authorized realtime stream');
   console.log('✓ stable client assets loaded');
-  console.log('✓ state migrated to v5');
+  console.log('✓ state migrated to v6');
 }finally{
   child.kill('SIGTERM');
   await new Promise(resolve=>{if(child.exitCode!==null)return resolve();child.once('exit',resolve);setTimeout(resolve,1200)});
