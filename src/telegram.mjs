@@ -12,9 +12,6 @@ export function verifyTelegramInitData(initData, botToken, maxAgeSeconds=86400){
   const hash = params.get('hash');
   if (!hash) return null;
   params.delete('hash');
-  // Telegram adds `signature` for third-party Mini App validation. It is not
-  // part of the bot-token HMAC data-check string used by this server.
-  params.delete('signature');
   const authDate = Number(params.get('auth_date') || 0);
   if (!authDate || Math.abs(Date.now()/1000 - authDate) > maxAgeSeconds) return null;
   const dataCheckString = [...params.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${k}=${v}`).join('\n');
