@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const files={};
 const server=await readFile(path.join(root,'server.mjs'),'utf8');
-for(const name of ['public/index.html','public/stable-core.js','public/app.js','public/sw.js','public/ui-v2.js','public/map-enhancements.js','public/journey.js','public/district.js','public/ar-encounter.js','public/pulse-random-spirit.js']){
+for(const name of ['public/index.html','public/stable-core.js','public/app.js','public/sw.js','public/ui-v2.css','public/ui-v2.js','public/onboarding.js','public/map-enhancements.js','public/journey.css','public/journey.js','public/district.js','public/ar-encounter.js','public/pulse-random-spirit.js']){
   files[name]=await readFile(path.join(root,name),'utf8');
 }
 const index=files['public/index.html'];
@@ -16,8 +16,19 @@ assert.match(index,/ar-encounter\.css/);
 assert.match(index,/ar-encounter\.js/);
 assert.match(index,/pulse-random-spirit\.js/);
 assert.match(index,/app\.js\?v=7/,'gameplay client changes must advance the cache-busting version');
-assert.match(files['public/sw.js'],/gran-shell-v21/,'service worker cache must change when the shell is updated');
+assert.match(index,/journey\.js\?v=4/);
+assert.match(index,/journey\.css\?v=4/);
+assert.match(files['public/sw.js'],/gran-shell-v22/,'service worker cache must change when the shell is updated');
 assert.match(files['public/sw.js'],/app\.js\?v=7/,'service worker must precache the current client version');
+assert.match(files['public/sw.js'],/journey\.js\?v=4/);
+assert.match(files['public/sw.js'],/onboarding\.js\?v=3/);
+assert.doesNotMatch(files['public/ui-v2.css'],/\.journey-card\{display:none!important\}/,'the first expedition card must remain visible');
+assert.doesNotMatch(files['public/onboarding.js'],/showOnboarding|coachPulse|firstSessionHint/,'duplicate tutorial overlays must stay removed');
+assert.doesNotMatch(files['public/app.js'],/showTutorial/,'legacy welcome modal must stay removed');
+assert.match(files['public/journey.js'],/Разрешите геолокацию/);
+assert.match(files['public/journey.js'],/journey:open-event/);
+assert.match(files['public/journey.js'],/journey:refresh-world/);
+assert.match(files['public/journey.css'],/journey-progress\{display:grid;grid-template-columns:repeat\(4,1fr\)/,'journey progress must fit all four steps');
 assert.doesNotMatch(index,/demo-domovoy/);
 
 const fetchOwners=Object.entries(files).filter(([,text])=>/window\.fetch\s*=/.test(text)).map(([name])=>name);

@@ -11,7 +11,7 @@ body{background:#06100d;overscroll-behavior:none}
 .district-kicker{font-size:8px}.district-orb h3{font-size:14px;margin:3px 0}.district-summary{font-size:8px}.district-mini-progress{margin-top:6px;height:3px}
 .geo-status{top:78px;left:12px;right:auto;width:auto;max-width:220px;padding:7px 9px;border-radius:12px;background:rgba(28,24,10,.92);border-color:rgba(233,199,119,.28);box-shadow:var(--ui-glow)}
 .geo-status strong{font-size:9px;white-space:nowrap}.geo-status span{display:none}.geo-status button{padding:6px 8px;font-size:8px;white-space:nowrap}
-.journey-card{display:none!important}.first-session-hint{display:none!important}
+
 .nearest-objective{left:12px;right:12px;bottom:92px;padding:9px 10px;border-radius:15px;background:var(--ui-bg-strong);box-shadow:var(--ui-glow)}
 .nearest-objective .objective-icon{width:38px;height:38px;border-radius:12px}.nearest-objective b{font-size:11px}.nearest-objective small{font-size:9px}.nearest-objective button{padding:7px 10px}
 .navi-pulse{bottom:14px;min-width:210px;padding:10px 18px;border-radius:18px;box-shadow:0 12px 36px rgba(0,0,0,.4),0 0 24px rgba(77,222,147,.16)}
