@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const files={};
+const server=await readFile(path.join(root,'server.mjs'),'utf8');
 for(const name of ['public/index.html','public/stable-core.js','public/app.js','public/ui-v2.js','public/map-enhancements.js','public/journey.js','public/district.js','public/ar-encounter.js','public/pulse-random-spirit.js']){
   files[name]=await readFile(path.join(root,name),'utf8');
 }
@@ -27,6 +28,8 @@ assert.match(files['public/app.js'],/core\.selectEvent\(obj\.id\)/);
 assert.match(files['public/ui-v2.js'],/core\.state\.selectedEventId/);
 assert.match(files['public/stable-core.js'],/x-telegram-init-data/);
 assert.match(files['public/stable-core.js'],/getReader\(\)/);
+assert.match(server,/referrer-policy':'strict-origin-when-cross-origin'/,'static pages must send an origin referrer to OpenStreetMap tiles');
+assert.doesNotMatch(server,/referrer-policy':'same-origin'/,'same-origin suppresses the cross-origin Referer required by OpenStreetMap');
 assert.match(files['public/ar-encounter.js'],/\/api\/spirit\/start/);
 assert.match(files['public/ar-encounter.js'],/\/api\/spirit\/resolve/);
 assert.match(files['public/ar-encounter.js'],/\/api\/spirit\/rune-check/);
