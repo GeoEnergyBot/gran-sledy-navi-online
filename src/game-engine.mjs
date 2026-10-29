@@ -188,7 +188,8 @@ export function startEncounter(state,p,{eventId,lat,lng}){
   if(!obj) throw httpError(404,'Событие исчезло или находится слишком далеко');
   if(Date.now()<obj.startsAt||Date.now()>obj.expiresAt)throw httpError(410,'Событие уже завершилось. Обновите карту.');
   const distance=haversine(lat,lng,obj.lat,obj.lng);
-  if(!demoMode && distance>140) throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`);
+  const interactionRadius=['trace','creature'].includes(obj.type)?30:140;
+  if(!demoMode && distance>interactionRadius) throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`);
   if(proof.suspicious && !demoMode) throw httpError(403,'Не удалось подтвердить перемещение');
   if(obj.type==='rift'){
     const progress=state.worldProgress[obj.id];
