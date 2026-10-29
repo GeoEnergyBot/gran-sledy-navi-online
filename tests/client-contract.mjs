@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const files={};
 const server=await readFile(path.join(root,'server.mjs'),'utf8');
-for(const name of ['public/index.html','public/stable-core.js','public/app.js','public/ui-v2.js','public/map-enhancements.js','public/journey.js','public/district.js','public/ar-encounter.js','public/pulse-random-spirit.js']){
+for(const name of ['public/index.html','public/stable-core.js','public/app.js','public/sw.js','public/ui-v2.js','public/map-enhancements.js','public/journey.js','public/district.js','public/ar-encounter.js','public/pulse-random-spirit.js']){
   files[name]=await readFile(path.join(root,name),'utf8');
 }
 const index=files['public/index.html'];
@@ -15,6 +15,9 @@ assert.ok(index.indexOf('/stable-core.js')<index.indexOf('/app.js'),'stable-core
 assert.match(index,/ar-encounter\.css/);
 assert.match(index,/ar-encounter\.js/);
 assert.match(index,/pulse-random-spirit\.js/);
+assert.match(index,/app\.js\?v=7/,'gameplay client changes must advance the cache-busting version');
+assert.match(files['public/sw.js'],/gran-shell-v21/,'service worker cache must change when the shell is updated');
+assert.match(files['public/sw.js'],/app\.js\?v=7/,'service worker must precache the current client version');
 assert.doesNotMatch(index,/demo-domovoy/);
 
 const fetchOwners=Object.entries(files).filter(([,text])=>/window\.fetch\s*=/.test(text)).map(([name])=>name);
