@@ -15,11 +15,13 @@ assert.ok(index.indexOf('/stable-core.js')<index.indexOf('/app.js'),'stable-core
 assert.match(index,/ar-encounter\.css/);
 assert.match(index,/ar-encounter\.js/);
 assert.match(index,/pulse-random-spirit\.js/);
-assert.match(index,/app\.js\?v=8/,'gameplay client changes must advance the cache-busting version');
+assert.match(index,/app\.js\?v=9/,'gameplay client changes must advance the cache-busting version');
+assert.match(index,/map-enhancements\.js\?v=8/);
 assert.match(index,/journey\.js\?v=5/);
 assert.match(index,/journey\.css\?v=4/);
-assert.match(files['public/sw.js'],/gran-shell-v23/,'service worker cache must change when the shell is updated');
-assert.match(files['public/sw.js'],/app\.js\?v=8/,'service worker must precache the current client version');
+assert.match(files['public/sw.js'],/gran-shell-v24/,'service worker cache must change when the shell is updated');
+assert.match(files['public/sw.js'],/app\.js\?v=9/,'service worker must precache the current client version');
+assert.match(files['public/sw.js'],/map-enhancements\.js\?v=8/);
 assert.match(files['public/sw.js'],/journey\.js\?v=5/);
 assert.match(files['public/sw.js'],/onboarding\.js\?v=4/);
 assert.doesNotMatch(files['public/ui-v2.css'],/\.journey-card\{display:none!important\}/,'the first expedition card must remain visible');

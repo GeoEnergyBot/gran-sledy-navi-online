@@ -1,14 +1,14 @@
-const CACHE='gran-shell-v23';
+const CACHE='gran-shell-v24';
 const SHELL=[
   '/',
   '/styles.css?v=6',
   '/startup.css?v=1',
   '/stable-core.js?v=2',
-  '/app.js?v=8',
+  '/app.js?v=9',
   '/onboarding.css?v=2',
   '/onboarding.js?v=4',
   '/map-enhancements.css?v=6',
-  '/map-enhancements.js?v=7',
+  '/map-enhancements.js?v=8',
   '/journey.css?v=4',
   '/journey.js?v=5',
   '/district.css?v=3',
