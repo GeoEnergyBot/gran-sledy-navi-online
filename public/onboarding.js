@@ -20,7 +20,7 @@ function notify(message){
 async function setupGeoStatus(){
   const view=document.querySelector('.view[data-view="map"]');if(!view||document.querySelector('.geo-status'))return;
   const box=document.createElement('div');box.className='geo-status hidden';
-  box.innerHTML='<div><strong>Геолокация выключена</strong><span>Разрешите GPS, чтобы увидеть события рядом с вами.</span></div><button type="button">Включить GPS</button>';
+  box.innerHTML='<div><strong>Виртуальный район активен</strong><span>Полевые события доступны с GPS; исследовать игровой мир можно и без него.</span></div><button type="button">Включить GPS</button>';
   view.append(box);box.querySelector('button').onclick=()=>document.querySelector('#locateBtn')?.click();
   if(!navigator.geolocation){box.classList.remove('hidden');return}
   try{if(navigator.permissions){const permission=await navigator.permissions.query({name:'geolocation'});const sync=()=>box.classList.toggle('hidden',permission.state==='granted');sync();permission.onchange=sync}}catch{}

@@ -5,6 +5,7 @@ const {ensurePlayer,worldNearby,startEncounter}=await import('../src/game-engine
 
 const state={players:{},worldProgress:{},encounters:{},economy:{totalSignsIssued:0},presence:{},circles:{},audit:[]};
 const player=ensurePlayer(state,{id:'distance-test',name:'Проверка',verified:true});
+player.locationMode='field';
 const world=worldNearby(state,player,43.238949,76.889709,4000);
 const creature=world.find(x=>['trace','creature'].includes(x.type));
 const other=world.find(x=>!['trace','creature'].includes(x.type));
@@ -24,5 +25,13 @@ assert.equal(attempt(creature,20).event.id,creature.id,'creature encounter must 
 assert.equal(attempt(other,160).status,403,'other encounter must reject at 160 m');
 assert.equal(attempt(other,100).event.id,other.id,'other encounter must start within 140 m');
 
+const virtualPlayer=ensurePlayer(state,{id:'virtual-test',name:'Виртуальный',verified:true});
+const virtualWorld=worldNearby(state,virtualPlayer,0,0,4000);
+const virtualObject=virtualWorld.find(x=>['trace','creature'].includes(x.type));
+assert.ok(virtualObject,'virtual world should provide a creature encounter');
+const virtualEncounter=startEncounter(state,virtualPlayer,{eventId:virtualObject.id,lat:43.238949,lng:76.889709});
+assert.equal(virtualEncounter.event.id,virtualObject.id,'archive mode must resolve event against the fixed virtual world, ignoring client coordinates');
+
 console.log('✓ creature encounters use a 30 m interaction radius');
 console.log('✓ other world events use a 140 m interaction radius');
+console.log('✓ virtual encounters work without GPS and ignore client coordinates');

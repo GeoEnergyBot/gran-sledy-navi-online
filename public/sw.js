@@ -1,16 +1,16 @@
-const CACHE='gran-shell-v22';
+const CACHE='gran-shell-v23';
 const SHELL=[
   '/',
   '/styles.css?v=6',
   '/startup.css?v=1',
   '/stable-core.js?v=2',
-  '/app.js?v=7',
+  '/app.js?v=8',
   '/onboarding.css?v=2',
-  '/onboarding.js?v=3',
+  '/onboarding.js?v=4',
   '/map-enhancements.css?v=6',
-  '/map-enhancements.js?v=6',
+  '/map-enhancements.js?v=7',
   '/journey.css?v=4',
-  '/journey.js?v=4',
+  '/journey.js?v=5',
   '/district.css?v=3',
   '/district.js?v=3',
   '/ui-v2.css?v=4',

@@ -4,6 +4,7 @@ import { creatures, items, recipes, professions, rarities, getCreature, getItem,
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const GRID = 0.0027;
+export const VIRTUAL_POSITION = Object.freeze({lat:0,lng:0});
 const commission = Math.max(0, Math.min(25, Number(process.env.MARKET_COMMISSION_PERCENT || 7))) / 100;
 const worldSeed = process.env.WORLD_SEED || 'gran-dev-world';
 const demoMode = String(process.env.DEMO_MODE || '1') === '1';
@@ -45,8 +46,11 @@ export function ensurePlayer(state, identity){
       circleId:null, stats:{encounters:0, crafts:0, trades:0, riftContribution:0, distanceM:0},
       lastPosition:null, cosmetics:{frame:'default', scanner:'copper'}, flags:{tutorial:false}
     };
+    p.locationMode='archive';
     state.economy.totalSignsIssued += p.signs;
   }
+  // Old saves enter the virtual world first; opting into GPS remains an explicit action.
+  p.locationMode=p.locationMode==='field'?'field':'archive';
   p.name = identity.name || p.name;
   p.lastSeenAt = nowIso();
   refreshQuests(p);
@@ -66,7 +70,7 @@ function progressQuest(p, event, amount=1){
 
 function publicPlayer(p){
   return {
-    id:p.id, name:p.name, verified:p.verified, level:p.level, xp:p.xp, essence:p.essence, signs:p.signs, reputation:p.reputation,
+    id:p.id, name:p.name, verified:p.verified, locationMode:p.locationMode||'archive', level:p.level, xp:p.xp, essence:p.essence, signs:p.signs, reputation:p.reputation,
     inventory:p.inventory, uniqueArtifacts:p.uniqueArtifacts, codex:p.codex, equipment:p.equipment, professions:p.professions, professionXp:p.professionXp||{},
     shelter:p.shelter, circleId:p.circleId, stats:p.stats, quests:p.quests, cosmetics:p.cosmetics, flags:p.flags,
     xpNext:(p.level**2)*80
@@ -170,26 +174,29 @@ export function heartbeat(state,p,lat,lng,accuracy){
   if(!demoMode&&(!hasAccuracy||!Number.isFinite(reportedAccuracy)||reportedAccuracy<=0||reportedAccuracy>200))throw httpError(403,'Недостаточная точность GPS. Перейдите на открытое место и повторите попытку.');
   const proof=locationProof(p,lat,lng,reportedAccuracy);
   if(proof.suspicious&&!demoMode)throw httpError(403,'Перемещение выглядит слишком быстрым. Остановитесь и повторите попытку.');
+  p.locationMode='field';
   state.presence[p.id]={playerId:p.id,name:p.name,level:p.level,lat,lng,updatedAt:Date.now(),circleId:p.circleId};
   const nearby=Object.values(state.presence).filter(x=>x.playerId!==p.id && Date.now()-x.updatedAt<120000 && haversine(lat,lng,x.lat,x.lng)<1500);
   return {count:nearby.length, players:nearby.slice(0,12).map(x=>({name:x.name,level:x.level,distance:Math.round(haversine(lat,lng,x.lat,x.lng)/50)*50,circleId:x.circleId}))};
 }
 
 export function startEncounter(state,p,{eventId,lat,lng}){
-  lat=Number(lat);lng=Number(lng);
-  if(!demoMode){
+  const virtual=p.locationMode!=='field';
+  if(virtual){lat=VIRTUAL_POSITION.lat;lng=VIRTUAL_POSITION.lng}
+  else {lat=Number(lat);lng=Number(lng)}
+  if(!demoMode&&!virtual){
     const last=p.lastPosition,age=last?Date.now()-last.at:Infinity;
     if(!last||age>90_000)throw httpError(403,'Сначала подтвердите своё положение через GPS.');
     if(!Number.isFinite(last.accuracy)||last.accuracy>200)throw httpError(403,'Недостаточная точность GPS. Перейдите на открытое место и повторите попытку.');
     if(haversine(last.lat,last.lng,lat,lng)>100)throw httpError(403,'Положение изменилось. Обновите GPS и попробуйте снова.');
   }
-  const proof=locationProof(p,lat,lng);
+  const proof=virtual?{suspicious:false}:locationProof(p,lat,lng);
   const obj=findWorldObject(eventId,lat,lng);
   if(!obj) throw httpError(404,'Событие исчезло или находится слишком далеко');
   if(Date.now()<obj.startsAt||Date.now()>obj.expiresAt)throw httpError(410,'Событие уже завершилось. Обновите карту.');
   const distance=haversine(lat,lng,obj.lat,obj.lng);
   const interactionRadius=['trace','creature'].includes(obj.type)?30:140;
-  if(!demoMode && distance>interactionRadius) throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`);
+  if(!virtual&&!demoMode && distance>interactionRadius) throw httpError(403,`Подойдите ближе: ${Math.round(distance)} м`);
   if(proof.suspicious && !demoMode) throw httpError(403,'Не удалось подтвердить перемещение');
   if(obj.type==='rift'){
     const progress=state.worldProgress[obj.id];

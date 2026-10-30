@@ -69,6 +69,7 @@ try {
 
   const a = await request('alpha', '/api/bootstrap');
   assert.equal(a.player.signs, 80);
+  assert.equal(a.player.locationMode, 'archive');
   assert.equal(a.catalog.creatures.length, 12);
 
   const worldA = await request('alpha', '/api/world?lat=43.238949&lng=76.889709&radius=1200');
@@ -77,6 +78,17 @@ try {
   assert.deepEqual(worldA.objects.map(x => x.id), worldB.objects.map(x => x.id));
   assert.ok(worldA.district?.id);
   assert.equal(worldA.district.id, worldB.district.id);
+  const injectedWorld = await request('alpha', '/api/world?lat=43.238949&lng=76.889709&radius=1200');
+  const ignoredCoordinatesWorld = await request('alpha', '/api/world?lat=-33.8688&lng=151.2093&radius=1200');
+  assert.equal(ignoredCoordinatesWorld.locationMode, 'archive');
+  assert.deepEqual(ignoredCoordinatesWorld.objects.map(x => x.id), injectedWorld.objects.map(x => x.id));
+  const fieldHeartbeat = await request('alpha', '/api/heartbeat', {lat:43.238949,lng:76.889709,accuracy:10});
+  assert.ok(fieldHeartbeat);
+  const fieldWorld = await request('alpha', '/api/world?lat=43.238949&lng=76.889709&radius=1200');
+  assert.equal(fieldWorld.locationMode, 'field');
+  const returnedToVirtual = await request('alpha', '/api/location-mode', {mode:'archive'});
+  assert.equal(returnedToVirtual.locationMode, 'archive');
+  assert.equal((await request('alpha', '/api/bootstrap')).player.locationMode, 'archive');
   const initialDistrictProgress = worldA.district.threat.progress;
 
   const obj = worldA.objects[0];

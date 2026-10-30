@@ -7,7 +7,7 @@ import { resolveIdentity } from './src/telegram.mjs';
 import { getDistrict, publicDistrict, contributeToDistrict } from './src/districts.mjs';
 import { startSpiritEncounter, resolveSpiritEncounter, spiritProfile, createRandomTestSpirit, checkSpiritRune, checkStudyTool } from './src/spirit-interactions.mjs';
 import {
-  ensurePlayer, bootstrap, worldNearby, heartbeat, startEncounter, resolveEncounter,
+  ensurePlayer, bootstrap, worldNearby, heartbeat, startEncounter, resolveEncounter, VIRTUAL_POSITION,
   craft, equip, claimQuest, upgradeShelter, marketListings, createListing, cancelListing,
   buyListing, createCircle, joinCircle, getCircle, cryptoStatus, httpError, publicMarketListing
 } from './src/game-engine.mjs';
@@ -38,11 +38,12 @@ async function api(req,res,url){
   const result=await store.transaction(async state=>{
     store.prune();const p=ensurePlayer(state,identity);
     if(method==='GET'&&url.pathname==='/api/bootstrap'){const out=bootstrap(state,p);out.spiritProgress=spiritProfile(p);return out}
+    if(method==='POST'&&url.pathname==='/api/location-mode'){const body=await readJson(req);if(body.mode!=='archive')throw httpError(400,'Полевой режим включается подтверждением GPS');p.locationMode='archive';p.lastPosition=null;delete state.presence[p.id];return {locationMode:p.locationMode}}
     if(method==='GET'&&url.pathname==='/api/world'){
-      const {lat,lng}=parseCoords(url.searchParams.get('lat'),url.searchParams.get('lng'));
-      return {objects:worldNearby(state,p,lat,lng,Number(url.searchParams.get('radius')||1600)),district:publicDistrict(getDistrict(state,lat,lng))};
+      const {lat,lng}=p.locationMode==='field'?(p.lastPosition||parseCoords(url.searchParams.get('lat'),url.searchParams.get('lng'))):VIRTUAL_POSITION;
+      return {locationMode:p.locationMode||'archive',objects:worldNearby(state,p,lat,lng,Number(url.searchParams.get('radius')||1600)),district:publicDistrict(getDistrict(state,lat,lng))};
     }
-    if(method==='GET'&&url.pathname==='/api/district'){const {lat,lng}=parseCoords(url.searchParams.get('lat'),url.searchParams.get('lng'));return {district:publicDistrict(getDistrict(state,lat,lng))}}
+    if(method==='GET'&&url.pathname==='/api/district'){const {lat,lng}=p.locationMode==='field'?(p.lastPosition||parseCoords(url.searchParams.get('lat'),url.searchParams.get('lng'))):VIRTUAL_POSITION;return {district:publicDistrict(getDistrict(state,lat,lng))}}
     if(method==='POST'&&url.pathname==='/api/heartbeat'){const body=await readJson(req),{lat,lng}=parseCoords(body.lat,body.lng);return heartbeat(state,p,lat,lng,body.accuracy)}
     if(method==='POST'&&url.pathname==='/api/test/spirit-spawn'){const body=await readJson(req),coords=parseCoords(body.lat,body.lng);return {object:createRandomTestSpirit(state,p,coords)}}
     if(method==='POST'&&url.pathname==='/api/spirit/start'){const body=await readJson(req);parseCoords(body.lat,body.lng);return startSpiritEncounter(state,p,body)}
@@ -50,11 +51,11 @@ async function api(req,res,url){
     if(method==='POST'&&url.pathname==='/api/spirit/study-check'){const body=await readJson(req);return checkStudyTool(state,p,body)}
     if(method==='POST'&&url.pathname==='/api/spirit/resolve'){
       const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveSpiritEncounter(state,p,body);
-      if(out.success&&challenge?.obj){const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.mode==='calm'?'calm':body.mode==='banish'?'banish':'study',eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}
+      if(out.success&&challenge?.obj){const districtPosition=p.locationMode==='field'?challenge.obj:VIRTUAL_POSITION;const districtResult=contributeToDistrict(state,p,{lat:districtPosition.lat,lng:districtPosition.lng,choice:body.mode==='calm'?'calm':body.mode==='banish'?'banish':'study',eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}
       return out;
     }
     if(method==='POST'&&url.pathname==='/api/encounters/start'){const body=await readJson(req);parseCoords(body.lat,body.lng);return startEncounter(state,p,body)}
-    if(method==='POST'&&url.pathname==='/api/encounters/resolve'){const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveEncounter(state,p,body);if(out.success&&challenge?.obj){const districtResult=contributeToDistrict(state,p,{lat:challenge.obj.lat,lng:challenge.obj.lng,choice:body.choice,eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}if(out.reward?.shared)broadcast('rift:update',{eventId:out.reward.eventId,...out.reward.shared});return out}
+    if(method==='POST'&&url.pathname==='/api/encounters/resolve'){const body=await readJson(req),challenge=state.encounters[body.challengeId],out=resolveEncounter(state,p,body);if(out.success&&challenge?.obj){const districtPosition=p.locationMode==='field'?challenge.obj:VIRTUAL_POSITION;const districtResult=contributeToDistrict(state,p,{lat:districtPosition.lat,lng:districtPosition.lng,choice:body.choice,eventType:challenge.obj.type,amount:out.reward?.contribution||1});out.district=districtResult.district;out.districtContribution=districtResult.contribution;broadcast('district:update',{districtId:districtResult.district.id,district:districtResult.district,resolvedNow:districtResult.resolvedNow})}if(out.reward?.shared)broadcast('rift:update',{eventId:out.reward.eventId,...out.reward.shared});return out}
     if(method==='POST'&&url.pathname==='/api/craft'){const body=await readJson(req);return craft(state,p,body.recipeId)}
     if(method==='POST'&&url.pathname==='/api/equip'){const body=await readJson(req);return {player:equip(state,p,body)}}
     if(method==='POST'&&url.pathname==='/api/quests/claim'){const body=await readJson(req);return claimQuest(state,p,body.questId)}

@@ -25,14 +25,14 @@
     if(localStorage.getItem('gran_first_journey_hidden')==='1'||journeyStage()===5){card.classList.add('hidden');if(journeyStage()===5)localStorage.setItem('gran_first_journey_done','1');return}
     const stage=journeyStage();
     const content=[
-      ['Начните с карты','Разрешите геолокацию, чтобы увидеть места и события рядом с вами.','Включить GPS'],
+      ['Начните с карты','Ваш виртуальный район уже доступен. GPS можно включить отдельно для полевых событий.','Открыть карту'],
       ['Проявите следы','Нажмите «Импульс Нави». Он покажет ближайшие события общего мира.','Активировать Импульс'],
       ['Ищем знаки Нави','События ещё загружаются. Обновите своё положение, если карта долго не меняется.','Обновить карту'],
       ['Выберите ближайшее событие','Нажмите знак на карте или покажите ближайшую цель. Передвигайтесь только по безопасному маршруту.','Показать ближайшее'],
-      ['Завершите первую встречу','Откройте выбранное событие, подойдите на указанное расстояние и пройдите испытание.','Открыть событие']
+      ['Завершите первую встречу','Откройте событие и пройдите испытание. В виртуальном районе GPS не требуется.','Открыть событие']
     ][stage];
     card.classList.remove('hidden');card.querySelector('h3').textContent=content[0];card.querySelector('p').textContent=content[1];card.querySelector('.journey-action').textContent=content[2];
-    card.querySelector('.journey-progress').innerHTML=[['⌖','GPS',stage>0],['ᚾ','Импульс',stage>1],['⌁','Найти',stage>3],['◉','Встреча',false]].map(([icon,label,done])=>`<div class="journey-step ${done?'done':''}"><b>${done?'✓':icon}</b>${label}</div>`).join('');
+    card.querySelector('.journey-progress').innerHTML=[['⌂','Район',true],['ᚾ','Импульс',stage>1],['⌁','Найти',stage>3],['◉','Встреча',false]].map(([icon,label,done])=>`<div class="journey-step ${done?'done':''}"><b>${done?'✓':icon}</b>${label}</div>`).join('');
   }
   function nearestObject(){return J.world.filter(x=>!x.completed).sort((a,b)=>distance(core.state.position,a)-distance(core.state.position,b))[0]||null}
   function distance(a,b){if(!a||!b)return Infinity;const R=6371000,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180;return 2*R*Math.asin(Math.sqrt(Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2))}
